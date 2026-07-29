@@ -3,6 +3,10 @@
 一个零依赖的纯前端量化研究工作台：行情看盘、策略回测、模拟交易，外加一个可解释的量化打分 Agent。
 数据层做了适配抽象，既能用内置的行情模拟引擎离线跑，也能切到后端接真实美股数据。
 
+[![Deploy](https://github.com/Alexsheng26/quant-lab/actions/workflows/pages.yml/badge.svg)](https://github.com/Alexsheng26/quant-lab/actions/workflows/pages.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![No dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
+
 **🔗 在线 Demo：<https://alexsheng26.github.io/quant-lab/>**
 （浏览器直接打开，跑内置模拟引擎；想看真实行情见下方「托管与部署」）
 
