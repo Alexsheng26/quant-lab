@@ -569,6 +569,31 @@ select { font-family: var(--sans); min-width: 140px; }
 .order-msg.ok   { color: var(--up); }
 .order-msg.err  { color: var(--down); }
 
+/* ---------------- 在线演示说明条 ---------------- */
+.demo-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 18px;
+  background: rgba(240, 167, 66, .1);
+  border-bottom: 1px solid rgba(240, 167, 66, .28);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+.db-icon { color: var(--warn); font-size: 14px; line-height: 1.4; flex-shrink: 0; }
+.db-text { color: var(--text-dim); flex: 1; }
+.db-text strong { color: var(--warn); font-weight: 600; }
+.db-text a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+.db-text a:hover { text-decoration: underline; }
+.db-close {
+  background: none; border: none;
+  color: var(--text-faint);
+  font-size: 18px; line-height: 1;
+  cursor: pointer; padding: 0 4px;
+  flex-shrink: 0;
+}
+.db-close:hover { color: var(--text); }
+
 /* ---------------- 个股全景（三 Agent） ---------------- */
 .agent-bar {
   display: flex; align-items: center; gap: 14px;

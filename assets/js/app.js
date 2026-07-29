@@ -201,6 +201,33 @@ QL.app = (function () {
     }
   }
 
+  /**
+   * 在线演示说明条。
+   *
+   * 只在「非本机 + 模拟数据 + 用户没关过」时出现——本地开发的人不需要看，
+   * 已经连上后端的人也不需要看。关掉后写进 localStorage，不再打扰。
+   */
+  function updateDemoBanner() {
+    const bar = $('#demoBanner');
+    if (!bar) return;
+    const dismissed = U.store.get('ql.demoBannerHidden', false);
+    const show = !CFG.isLocalHost && QL.data.mode === 'mock' && !dismissed;
+    bar.classList.toggle('hidden', !show);
+  }
+
+  function bindDemoBanner() {
+    const btn = $('#dbClose');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        U.store.set('ql.demoBannerHidden', true);
+        $('#demoBanner').classList.add('hidden');
+      });
+    }
+    // 切到 LIVE 就没必要再提示了
+    U.bus.on('data:mode', updateDemoBanner);
+    updateDemoBanner();
+  }
+
   /* ---------------- 轻量提示 ---------------- */
 
   let toastTimer = null;
@@ -352,6 +379,7 @@ QL.app = (function () {
     QL.paper.init();
 
     await ensureDataMode();
+    bindDemoBanner();                 // 要在数据源确定之后判断
     await setSymbol(CFG.defaultSymbol);
     startTicker();
   }

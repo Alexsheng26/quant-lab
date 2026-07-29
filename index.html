@@ -38,6 +38,19 @@
   </div>
 </header>
 
+<!-- 部署到静态托管后，访问者默认看到模拟数据。
+     光打水印只说明"这是假的"，没说"怎么拿到真的"，所以补一条可关闭的说明。
+     只在非本机环境且处于 MOCK 时出现，关掉后不再打扰。 -->
+<div id="demoBanner" class="demo-banner hidden">
+  <span class="db-icon">ⓘ</span>
+  <div class="db-text">
+    <strong>这是在线演示，当前显示模拟数据。</strong>
+    想看真实美股行情：克隆仓库后在本机运行后端（一条命令），这个页面会自动连上。
+    <a href="https://github.com/Alexsheng26/quant-lab#快速开始" target="_blank" rel="noopener">查看步骤 →</a>
+  </div>
+  <button id="dbClose" class="db-close" title="不再显示">×</button>
+</div>
+
 <div class="layout">
 
   <!-- ============ 左侧自选股 ============ -->
