@@ -26,33 +26,48 @@
 
 ## 快速开始
 
-**双击 `quantlab.bat`** —— 它会启动行情后端、等它就绪、再打开网页。
-后端已经在跑时不会重复启动。右上角徽章显示绿色 `LIVE 实时数据` 就说明接上真实行情了。
+### 只想看看 → 打开在线 Demo
 
-只想看界面不要真实数据，直接双击 `index.html` 也行，此时用内置行情模拟引擎，
-徽章显示 `MOCK 模拟数据`，**K 线图上会打「模拟数据 · 非真实行情」水印**。
+<https://alexsheng26.github.io/quant-lab/> —— 不用装任何东西。
+跑的是内置行情模拟引擎，**K 线图上有「模拟数据 · 非真实行情」水印**。
 
-| 文件 | 作用 |
+> 模拟模式的价格是按代码名哈希生成的，和现实无关——比如 TSM 可能显示 $23
+> 而实际是 $399。日期轴是真实交易日，只有价格是合成的。
+
+### 想要真实行情 → 起后端
+
+克隆仓库后装一次依赖：
+
+```bash
+python -m venv .venv
+.venv\Scripts\pip install -r backend/requirements.txt
+```
+
+之后 **Windows 双击 `quantlab.bat`** 就行——它会起后端、等就绪、再开网页。
+右上角徽章变成绿色 `LIVE 实时数据` 就是接上了。
+
+非 Windows，或想看后端日志：
+
+```bash
+.venv/bin/python backend/app.py     # 起后端，监听 127.0.0.1:8000
+```
+
+然后用浏览器打开 `index.html`，或直接用[在线 Demo](https://alexsheng26.github.io/quant-lab/)
+——页面启动时会自动探测本机 8000 端口，探到就用真实数据。
+（浏览器把 `localhost` 当可信来源，所以 HTTPS 页面也能连本机 HTTP 后端。Safari 除外。）
+
+### 文件对照
+
+| 文件 | 什么时候用 |
 | --- | --- |
-| `quantlab.bat` | **日常用这个**：起后端 + 开网页 |
-| `index.html` | 只开网页（后端没起就是模拟数据） |
-| `run-backend.bat` | 只起后端，能看到报错信息，排查时用 |
-| `serve.bat` | 用 HTTP 伺服前端（`localhost:5500`），绕开 `file://` 限制 |
+| `quantlab.bat` | **日常用这个**：起后端 + 开网页（Windows） |
+| `index.html` | 只开网页；后端没起就是模拟数据 |
+| `run-backend.bat` | 只起后端且保留窗口，排查报错时用 |
+| `serve.bat` | 一般用不到。用 HTTP 伺服前端（`localhost:5500`），只有极少数场景需要绕开 `file://` |
 
 > `.bat` 文件全部保持纯 ASCII。cmd.exe 是按字节偏移读批处理的，
 > 文件里混 UTF-8 中文（尤其再加一句 `chcp`）会让解析器错位，脚本以匪夷所思的方式崩掉。
 > 同理循环里用 `ping -n` 而不是 `timeout`——stdin 不是真实控制台时 `timeout` 会直接报错退出。
-
-> 模拟模式下的价格是程序按代码名哈希生成的，和现实无关——比如 TSM 可能显示 $23
-> 而实际是 $399。日期轴是真实交易日，只有价格是合成的。要看真价格就把后端起起来。
-
-如果想避免浏览器对 `file://` 的限制，可以起一个静态服务：
-
-```bash
-python -m http.server 5500
-```
-
-然后访问 <http://localhost:5500>。
 
 ## 接入真实行情
 
@@ -127,7 +142,7 @@ Windows 下也可以直接双击 `run-backend.bat`。后端起在 `http://127.0.
 > **踩过的坑**：yfinance 1.x 把 `fast_info` 的键从 `last_price` 改成了 `lastPrice`。
 > 后端两种命名都试，避免升级一次就静默退回日线数据。
 
-> **开发提示**：改完 JS/CSS 记得 `Ctrl+F5` 硬刷新。`python -m http.server` 不发 `Cache-Control`，
+> **开发提示**：改完 JS/CSS 记得 `Ctrl+F5` 硬刷新。本地静态服务不发 `Cache-Control`，
 > 浏览器会启发式缓存旧脚本，很容易对着旧代码调试。
 
 ## 托管与部署
