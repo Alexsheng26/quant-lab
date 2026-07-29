@@ -1,0 +1,11 @@
+# 统一换行符：仓库里存 LF，Windows 检出时按需转换。
+# 没有这个文件的话，Windows 提交的 CRLF 会让 Linux/macOS 上的 diff 全是噪声。
+* text=auto eol=lf
+
+# Windows 批处理必须是 CRLF，否则某些情况下会解析失败
+*.bat text eol=crlf
+
+# 自动生成的数据文件：不参与 diff，避免 PR 里刷屏
+assets/data/symbols.js       linguist-generated=true -diff
+backend/data/symbols.json    linguist-generated=true -diff
+backend/data/universe_snapshot.json linguist-generated=true -diff

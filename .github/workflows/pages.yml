@@ -1,0 +1,47 @@
+# 把前端发布到 GitHub Pages。
+#
+# 只发静态部分（index.html + assets/），backend/ 是 Python，Pages 跑不了，
+# 但它留在仓库里供人克隆自行运行。
+#
+# 首次使用：仓库 Settings → Pages → Source 选 "GitHub Actions"。
+
+name: Deploy frontend to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # 允许手动触发
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同时只跑一个部署；新的推送不打断进行中的发布
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 只挑出静态资源
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r assets _site/
+          # 没有 .nojekyll 的话，Jekyll 会忽略下划线开头的文件
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

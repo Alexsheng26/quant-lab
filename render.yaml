@@ -1,0 +1,30 @@
+# 可选：把行情后端部署到 Render 免费档。
+#
+# 用法：Render 控制台 → New → Blueprint → 选这个仓库，它会读这个文件。
+#
+# 免费档的两个现实限制，先知道再决定用不用：
+#   1. 15 分钟无请求就休眠，下次请求要等 30~60 秒冷启动。
+#   2. 数据中心 IP 经常被 Yahoo 限流，yfinance 可能间歇性失败——
+#      本地跑不会有这个问题，因为家用 IP 不在黑名单上。
+#
+# 环境变量在 Render 控制台里设，不要写进这个文件：
+#   ALLOWED_ORIGINS    = https://<你的用户名>.github.io   ← 必设，否则谁都能调
+#   ANTHROPIC_API_KEY  = <你的 Claude Key>                ← 可选，配了才有生成式问答
+#   LLM_CALLS_PER_HOUR = 30                               ← 可选，默认 30
+
+services:
+  - type: web
+    name: quantlab-api
+    runtime: python
+    plan: free
+    region: singapore          # 亚洲用户延迟更低；也可选 oregon / frankfurt
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --app-dir backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"          # 3.14 上部分依赖的 wheel 还不齐
+      - key: ALLOWED_ORIGINS
+        sync: false            # 在控制台填，不进仓库
+      - key: ANTHROPIC_API_KEY
+        sync: false            # 同上；绝不写进文件

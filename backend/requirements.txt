@@ -1,0 +1,14 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pandas>=2.0
+
+# 美股数据首选（覆盖全、字段稳定）
+yfinance>=0.2.40
+
+# 中文社区常用；A 股最好，美股走东财接口，作为备用源
+akshare>=1.13.0
+
+# 新闻 Agent 的生成式问答（可选）。没配 ANTHROPIC_API_KEY 时
+# 自动退回检索式，不装这个包也不影响其他功能。
+anthropic>=0.116.0
+python-dotenv>=1.0.0

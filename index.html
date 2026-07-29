@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuantLab · 美股量化研究终端</title>
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<!-- ============ 顶栏 ============ -->
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">Q</span>
+    <div class="brand-text">
+      <strong>QuantLab</strong>
+      <small>US Equity Research Terminal</small>
+    </div>
+  </div>
+
+  <div class="search-wrap">
+    <input id="symbolSearch" type="text" placeholder="搜索代码或公司名，如 AAPL / 英伟达 / 半导体" autocomplete="off" spellcheck="false">
+    <div id="searchResults" class="search-results hidden">
+      <div class="sr-filter" id="srFilter">
+        <button class="chip active" data-ex="ALL">全部</button>
+        <button class="chip" data-ex="NASDAQ">纳斯达克</button>
+        <button class="chip" data-ex="NYSE">纽交所</button>
+        <button class="chip" data-ex="ETF">ETF</button>
+      </div>
+      <div class="sr-list" id="srList"></div>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <span id="clock" class="clock">--:--:--</span>
+    <span id="marketStatus" class="pill pill-muted">美股状态</span>
+    <span id="dataMode" class="pill pill-mock" title="点击切换数据源（MOCK / LIVE）">MOCK 模拟数据</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ============ 左侧自选股 ============ -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <span>自选列表</span>
+      <span id="watchCount" class="muted">0</span>
+    </div>
+    <ul id="watchlist" class="watchlist"></ul>
+    <div class="sidebar-foot">
+      <button id="btnAddWatch" class="btn btn-ghost btn-sm">+ 加入自选</button>
+      <button id="btnResetWatch" class="btn btn-ghost btn-sm" title="恢复默认自选列表">重置</button>
+    </div>
+  </aside>
+
+  <!-- ============ 主区域 ============ -->
+  <main class="main">
+
+    <!-- 标的头部 -->
+    <section class="quote-head">
+      <div class="quote-id">
+        <button id="btnStar" class="star" title="加入/移出自选">☆</button>
+        <h1 id="qSymbol">—</h1>
+        <span id="qName" class="muted">—</span>
+        <span id="qExchange" class="tag">—</span>
+      </div>
+      <div class="quote-price">
+        <span id="qLast" class="last">—</span>
+        <span id="qChange" class="change">—</span>
+      </div>
+      <div class="quote-stats">
+        <div><label>开盘</label><span id="qOpen">—</span></div>
+        <div><label>最高</label><span id="qHigh">—</span></div>
+        <div><label>最低</label><span id="qLow">—</span></div>
+        <div><label>昨收</label><span id="qPrev">—</span></div>
+        <div><label>成交量</label><span id="qVol">—</span></div>
+        <div><label>振幅</label><span id="qAmp">—</span></div>
+        <div><label>数据截止</label><span id="qAsOf">—</span></div>
+      </div>
+    </section>
+
+    <!-- 标签页 -->
+    <nav class="tabs">
+      <button class="tab active" data-view="market">行情</button>
+      <button class="tab" data-view="agent">AI 量化打分</button>
+      <button class="tab" data-view="panorama">个股全景</button>
+      <button class="tab" data-view="backtest">策略回测</button>
+      <button class="tab" data-view="paper">模拟交易</button>
+    </nav>
+
+    <!-- ---------- 视图：行情 ---------- -->
+    <section class="view active" id="view-market">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">K 线图</span>
+          <div class="toolbar">
+            <div class="btn-group" id="intervalGroup">
+              <button class="btn btn-sm active" data-interval="day">日K</button>
+              <button class="btn btn-sm" data-interval="week">周K</button>
+              <button class="btn btn-sm" data-interval="month">月K</button>
+            </div>
+            <div class="btn-group" id="rangeGroup">
+              <button class="btn btn-sm" data-range="60">3M</button>
+              <button class="btn btn-sm active" data-range="120">6M</button>
+              <button class="btn btn-sm" data-range="250">1Y</button>
+              <button class="btn btn-sm" data-range="0">全部</button>
+            </div>
+            <div class="btn-group" id="maGroup">
+              <button class="btn btn-sm active" data-ma="5">MA5</button>
+              <button class="btn btn-sm active" data-ma="20">MA20</button>
+              <button class="btn btn-sm active" data-ma="60">MA60</button>
+              <button class="btn btn-sm" data-ma="boll">BOLL</button>
+            </div>
+            <div class="btn-group" id="subGroup">
+              <button class="btn btn-sm active" data-sub="vol">成交量</button>
+              <button class="btn btn-sm" data-sub="macd">MACD</button>
+              <button class="btn btn-sm" data-sub="rsi">RSI</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-host">
+          <canvas id="mainChart"></canvas>
+          <div id="chartTip" class="chart-tip hidden"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title" id="snapshotTitle">技术指标快照</span></div>
+          <div id="indicatorSnapshot" class="kv-grid"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">逐笔成交（模拟撮合）</span></div>
+          <div class="table-wrap tape-wrap">
+            <table class="table" id="tapeTable">
+              <thead><tr><th>时间</th><th class="num">价格</th><th class="num">数量</th><th>方向</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- 视图：AI 打分 ---------- -->
+    <section class="view" id="view-agent">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">量化分析 Agent</span>
+          <div class="toolbar">
+            <label class="inline-label">周期
+              <select id="agInterval" class="sel-sm">
+                <option value="day">日线</option>
+                <option value="week">周线</option>
+                <option value="month">月线</option>
+              </select>
+            </label>
+            <button id="btnRunAgent" class="btn btn-primary btn-sm">运行分析</button>
+          </div>
+        </div>
+        <div class="agent-body">
+          <div class="score-block">
+            <div class="score-ring">
+              <svg viewBox="0 0 120 120">
+                <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+                <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="52"></circle>
+              </svg>
+              <div class="score-center">
+                <span id="scoreValue">--</span>
+                <small>/ 100</small>
+              </div>
+            </div>
+            <div id="scoreRating" class="rating">等待分析</div>
+            <div id="scoreSummary" class="muted score-summary">点击「运行分析」，Agent 会基于趋势、动量、波动率、量能与位置五个维度对该标的打分。</div>
+          </div>
+          <div class="factor-block">
+            <div id="factorList" class="factor-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">方向判断与参考价位</span>
+        </div>
+        <div id="directionBox" class="direction-box">
+          <span class="muted">运行分析后显示</span>
+        </div>
+        <p id="levelWarn" class="level-warn hidden"></p>
+        <div id="levelCards" class="level-cards"></div>
+        <p class="level-note">
+          价位由均线、布林轨道、区间低点等历史数据算出，用于标记技术结构，
+          <strong>不预测未来走势，也不构成任何操作建议</strong>。
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">分析要点</span></div>
+          <ul id="agentReasons" class="reason-list"><li class="muted">暂无</li></ul>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">风险与统计</span></div>
+          <div id="agentStats" class="kv-grid"></div>
+        </div>
+      </div>
+      <p class="disclaimer">⚠️ 本工具输出为程序化技术指标计算结果，仅用于研究与学习，不构成任何投资建议。</p>
+    </section>
+
+    <!-- ---------- 视图：个股全景（三个 Agent 协同） ---------- -->
+    <section class="view" id="view-panorama">
+      <div class="agent-bar">
+        <span class="muted">三个 Agent 并行工作：全市场分位 · 资讯扫描 · 公告财报</span>
+        <button id="btnRunPanorama" class="btn btn-primary btn-sm">运行全景分析</button>
+      </div>
+
+      <!-- ① 量化分析 Agent -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">① 量化分析 Agent · 全市场分位</span>
+          <span id="quantUniverse" class="muted"></span>
+        </div>
+        <div class="quant-body">
+          <div class="radar-host"><canvas id="radarChart"></canvas></div>
+          <div class="quant-side">
+            <div id="quantVerdict" class="verdict"><span class="muted">点击「运行全景分析」</span></div>
+            <div id="quantAxes" class="axis-list"></div>
+            <div class="radar-legend">
+              <span><i class="lg-fill"></i>全市场分位</span>
+              <span><i class="lg-dash"></i>同行业分位</span>
+              <span><i class="lg-mid"></i>50 分位线</span>
+            </div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table" id="quantDetail">
+            <thead><tr><th>指标</th><th class="num">数值</th><th class="num">全市场分位</th><th class="num">行业分位</th></tr></thead>
+            <tbody><tr><td colspan="4" class="muted">—</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- ② 新闻 Agent -->
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">② 新闻 Agent</span>
+            <span id="newsSentiment" class="muted"></span>
+          </div>
+          <div class="ask-box">
+            <input id="newsQuestion" type="text" placeholder="就这批新闻提问，如 earnings / AI / lawsuit">
+            <button id="btnAskNews" class="btn btn-sm">检索</button>
+          </div>
+          <div id="newsAnswer" class="news-answer hidden"></div>
+          <div id="newsSources" class="news-sources"></div>
+          <div id="newsList" class="news-list"><div class="muted pad">未加载</div></div>
+        </div>
+
+        <!-- ③ 研究 Agent -->
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">③ 研究 Agent · 公告与财报</span>
+            <span id="filingCompany" class="muted"></span>
+          </div>
+          <div id="financialSummary" class="fin-summary"></div>
+          <div id="filingList" class="filing-list"><div class="muted pad">未加载</div></div>
+        </div>
+      </div>
+
+      <p class="disclaimer">
+        ⚠️ 分位数基于标普 500 成分股快照横向比较；新闻与公告直接来自 Yahoo Finance 与 SEC EDGAR，
+        未经二次核实。全部内容仅供研究学习，不构成投资建议。
+      </p>
+    </section>
+
+    <!-- ---------- 视图：回测 ---------- -->
+    <section class="view" id="view-backtest">
+      <div class="panel">
+        <div class="panel-head"><span class="panel-title">回测参数</span></div>
+        <div class="form-row">
+          <label>周期
+            <select id="btInterval">
+              <option value="day">日线</option>
+              <option value="week">周线</option>
+              <option value="month">月线</option>
+            </select>
+          </label>
+          <label>策略
+            <select id="btStrategy">
+              <option value="ma_cross">双均线交叉</option>
+              <option value="rsi_reversion">RSI 均值回归</option>
+              <option value="macd">MACD 金叉死叉</option>
+              <option value="boll_breakout">布林带突破</option>
+              <option value="donchian">唐奇安通道突破</option>
+              <option value="buy_hold">买入持有（基准）</option>
+            </select>
+          </label>
+          <div id="btParams" class="param-box"></div>
+          <label>初始资金
+            <input id="btCapital" type="number" value="100000" step="10000" min="1000">
+          </label>
+          <label>手续费(bps)
+            <input id="btFee" type="number" value="5" step="1" min="0">
+          </label>
+          <label>滑点(bps)
+            <input id="btSlip" type="number" value="5" step="1" min="0">
+          </label>
+          <button id="btnRunBacktest" class="btn btn-primary">开始回测</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">资金曲线</span>
+          <span class="legend"><i class="dot dot-strategy"></i>策略 <i class="dot dot-bench"></i>买入持有</span>
+        </div>
+        <div class="chart-host chart-host-sm">
+          <canvas id="equityChart"></canvas>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">绩效指标</span></div>
+          <div id="btMetrics" class="kv-grid"><span class="muted">尚未运行回测</span></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">交易记录</span></div>
+          <div class="table-wrap">
+            <table class="table" id="btTrades">
+              <thead><tr><th>#</th><th>买入日</th><th class="num">买价</th><th>卖出日</th><th class="num">卖价</th><th class="num">收益</th><th class="num">持有</th></tr></thead>
+              <tbody><tr><td colspan="7" class="muted">—</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- 视图：模拟交易 ---------- -->
+    <section class="view" id="view-paper">
+      <div class="account-cards">
+        <div class="acc-card"><label>总资产</label><span id="accTotal">—</span></div>
+        <div class="acc-card"><label>可用现金</label><span id="accCash">—</span></div>
+        <div class="acc-card"><label>持仓市值</label><span id="accMarket">—</span></div>
+        <div class="acc-card"><label>累计盈亏</label><span id="accPnl">—</span></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">下单</span></div>
+          <div class="order-form">
+            <label>标的<input id="ordSymbol" type="text" readonly></label>
+            <label>现价<input id="ordPrice" type="text" readonly></label>
+            <label>数量<input id="ordQty" type="number" value="10" min="1" step="1"></label>
+            <div class="qty-quick">
+              <span class="muted">快捷仓位</span>
+              <button class="btn btn-ghost btn-sm" data-pct="0.25">25%</button>
+              <button class="btn btn-ghost btn-sm" data-pct="0.5">50%</button>
+              <button class="btn btn-ghost btn-sm" data-pct="1">全仓</button>
+            </div>
+            <div class="order-actions">
+              <button id="btnBuy" class="btn btn-buy">买入</button>
+              <button id="btnSell" class="btn btn-sell">卖出</button>
+            </div>
+            <p id="ordMsg" class="order-msg"></p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">当前持仓</span>
+            <button id="btnResetAccount" class="btn btn-ghost btn-sm">重置账户</button>
+          </div>
+          <div class="table-wrap">
+            <table class="table" id="posTable">
+              <thead><tr><th>代码</th><th class="num">数量</th><th class="num">成本</th><th class="num">现价</th><th class="num">市值</th><th class="num">浮动盈亏</th></tr></thead>
+              <tbody><tr><td colspan="6" class="muted">暂无持仓</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><span class="panel-title">成交流水</span></div>
+        <div class="table-wrap">
+          <table class="table" id="orderTable">
+            <thead><tr><th>时间</th><th>代码</th><th>方向</th><th class="num">价格</th><th class="num">数量</th><th class="num">金额</th></tr></thead>
+            <tbody><tr><td colspan="6" class="muted">暂无记录</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="footer">
+  QuantLab · 纯静态前端，数据层可一键切换到后端真实行情 ·
+  <span class="muted">仅供学习研究，不构成投资建议</span>
+</footer>
+
+<!-- 无构建、无第三方依赖，按依赖顺序加载即可，直接双击 index.html 就能跑 -->
+<script src="assets/js/config.js"></script>
+<script src="assets/data/symbols.js"></script>
+<script src="assets/js/utils.js"></script>
+<script src="assets/js/indicators.js"></script>
+<script src="assets/js/dataSource.js"></script>
+<script src="assets/js/chart.js"></script>
+<script src="assets/js/market.js"></script>
+<script src="assets/js/agent.js"></script>
+<script src="assets/js/agents.js"></script>
+<script src="assets/js/backtest.js"></script>
+<script src="assets/js/paper.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
