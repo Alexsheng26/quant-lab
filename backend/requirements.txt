@@ -13,5 +13,6 @@ akshare>=1.13.0
 anthropic>=0.116.0
 python-dotenv>=1.0.0
 
-# Éú³ÉÉç½»Ô¤ÀÀÍ¼£¨backend/build_og_image.py£©ÓÃ£¬²»Ó°ÏìÔËÐÐÊ±
+# åªæœ‰ç”Ÿæˆç¤¾äº¤é¢„è§ˆå›¾ï¼ˆbackend/build_og_image.pyï¼‰æ—¶æ‰ç”¨åˆ°ï¼Œ
+# ä¸å½±å“åŽç«¯è¿è¡Œæ—¶ã€‚
 pillow>=10.0.0
