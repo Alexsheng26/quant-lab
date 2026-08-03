@@ -763,6 +763,137 @@ select { font-family: var(--sans); min-width: 140px; }
   text-align: center;
 }
 
+/* ============================================================
+   窄屏适配
+   ============================================================
+
+   桌面版侧栏固定 232px。手机上（~390px 视口）那是 45% 的屏幕，
+   主区只剩 158px、K 线画布只有 100px —— 图表完全没法看。
+
+   这里把纵向侧栏改成横向可滑动的自选条，钉在顶部，
+   宽度还给主内容区。
+   ============================================================ */
+@media (max-width: 860px) {
+
+  .layout { flex-direction: column; }
+
+  /* 侧栏 → 顶部横条 */
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .sidebar-head {
+    border-bottom: none;
+    padding: 0 6px 0 0;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 0;
+    font-size: 9px;
+    line-height: 1.3;
+  }
+  .watchlist {
+    display: flex;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 2px;
+    scrollbar-width: none;                 /* 横向滚动条在手机上很难看 */
+  }
+  .watchlist::-webkit-scrollbar { display: none; }
+  .watchlist li {
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 88px;
+    padding: 7px 9px;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+  }
+  .watchlist li.active { border-left-color: transparent; border-bottom-color: var(--accent); }
+  .watchlist .wl-name { display: none; }   /* 横条里放不下公司名 */
+  .watchlist .wl-right { text-align: left; }
+  .watchlist li.wl-empty { min-width: 200px; padding: 12px; font-size: 11px; }
+  .wl-del { display: none; }                /* 触屏没有 hover，改用星标增删 */
+  .sidebar-foot {
+    border-top: none;
+    padding: 6px;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sidebar-foot .btn { font-size: 10px; padding: 3px 8px; white-space: nowrap; }
+
+  /* 顶栏：允许换行，别硬挤 */
+  .topbar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 8px 12px;
+  }
+  .search-wrap { order: 3; flex-basis: 100%; max-width: none; }
+  .topbar-right { gap: 6px; }
+  .clock { display: none; }                 /* 手机上优先保住徽章 */
+  .brand-text small { display: none; }
+
+  .main { padding: 10px 12px 24px; }
+
+  /* 报价头：改成两行，别把统计挤成一列 */
+  .quote-head { gap: 10px 16px; padding: 12px 14px; }
+  .quote-id h1 { font-size: 20px; }
+  .last { font-size: 24px; }
+  .quote-stats { margin-left: 0; flex-basis: 100%; gap: 14px; }
+
+  /* 标签页横向滑动，不换行挤成两排 */
+  .tabs { overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 9px 13px; font-size: 13px; white-space: nowrap; }
+
+  /* 图表：矮一点，宽度已经拿回来了 */
+  .chart-host { height: 320px; padding: 4px; }
+  .chart-host-sm { height: 240px; }
+  .toolbar { gap: 8px; width: 100%; margin-left: 0; }
+  .btn-group .btn { padding: 4px 8px; font-size: 11px; }
+  .panel-head { gap: 8px; }
+
+  /* 搜索下拉不能比屏幕宽 */
+  .search-results { width: 100%; left: 0; }
+  .sr-row { grid-template-columns: 52px 1fr auto 24px; gap: 6px; }
+  .sr-ex { display: none; }
+
+  /* 表单与网格 */
+  .form-row { gap: 10px; }
+  .form-row label, .param-box { flex: 1 1 44%; }
+  .form-row .btn-primary { flex-basis: 100%; }
+  .account-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .acc-card span { font-size: 17px; }
+  .kv-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+
+  /* 六边形雷达在窄屏要占满宽 */
+  .radar-host { width: 100%; height: 280px; }
+  .quant-body { padding: 12px; gap: 12px; }
+  .agent-body { padding: 14px; gap: 16px; }
+  .score-block { width: 100%; }
+
+  .demo-banner { padding: 9px 12px; font-size: 11.5px; }
+  .table-wrap { max-height: 260px; }
+}
+
+/* 超窄屏（小型手机） */
+@media (max-width: 420px) {
+  .account-cards { grid-template-columns: 1fr; }
+  .quote-stats { gap: 10px; }
+  .quote-stats span { font-size: 12px; }
+  .chart-host { height: 260px; }
+  .radar-host { height: 240px; }
+}
+
 /* 滚动条 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
