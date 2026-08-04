@@ -2,17 +2,20 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 pandas>=2.0
 
-# 缇庤偂鏁版嵁棣栭€夛紙瑕嗙洊鍏ㄣ€佸瓧娈电ǔ瀹氾級
+# 美股数据首选（覆盖全、字段稳定）
 yfinance>=0.2.40
 
-# 涓枃绀惧尯甯哥敤锛汚 鑲℃渶濂斤紝缇庤偂璧颁笢璐㈡帴鍙ｏ紝浣滀负澶囩敤婧?akshare>=1.13.0
+# 中文社区常用；A 股最好，美股走东财接口，作为备用源
+akshare>=1.13.0
 
-# 鏂伴椈 Agent 鐨勭敓鎴愬紡闂瓟锛堝彲閫夛級銆傛病閰?ANTHROPIC_API_KEY 鏃?# 鑷姩閫€鍥炴绱㈠紡锛屼笉瑁呰繖涓寘涔熶笉褰卞搷鍏朵粬鍔熻兘銆?anthropic>=0.116.0
+# 新闻 Agent 的生成式问答（可选）。没配 ANTHROPIC_API_KEY 时
+# 自动退回检索式，不装这个包也不影响其他功能。
+anthropic>=0.116.0
 python-dotenv>=1.0.0
 
-# 鍙湁鐢熸垚绀句氦棰勮鍥撅紙backend/build_og_image.py锛夋椂鎵嶇敤鍒帮紝
-# 涓嶅奖鍝嶅悗绔繍琛屾椂銆?pillow>=10.0.0
-
-# 生成 README 截图（backend/build_screenshots.py）用，不影响后端运行时。
-# 装完还需要：python -m playwright install chromium
+# 以下两个只在生成静态资源时用到，不影响后端运行时：
+#   pillow     → backend/build_og_image.py     生成社交预览图
+#   playwright → backend/build_screenshots.py  生成 README 截图
+#                装完还需要 python -m playwright install chromium
+pillow>=10.0.0
 playwright>=1.40.0
