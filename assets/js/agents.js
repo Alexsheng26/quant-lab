@@ -297,9 +297,16 @@ QL.agents = (function () {
       const s = fin.series, d = fin.derived || {};
       const order = ['revenue', 'netIncome', 'grossProfit', 'operatingIncome',
                      'cashFromOps', 'equity', 'assets'];
-      const years = [];
+
+      // 列头用后端给的 year 字段。别在这里自己 slice(0,4)——
+      // 财年跨年的公司（NVDA 财年一月底结束）会算出重复年份。
+      // 再去一次重，防止后端换实现后又冒出来。
       const rev = s.revenue ? s.revenue.rows : [];
-      rev.slice(-5).forEach(r => years.push(r.end.slice(0, 4)));
+      const years = [];
+      rev.slice(-5).forEach(r => {
+        const y = r.year || r.end.slice(0, 4);
+        if (years.indexOf(y) < 0) years.push(y);
+      });
 
       let html = '<div class="fin-head">SEC XBRL 结构化财务（年报口径，无需翻阅 PDF）</div>';
       html += '<div class="table-wrap"><table class="table"><thead><tr><th>科目</th>';
@@ -309,7 +316,7 @@ QL.agents = (function () {
       order.forEach(k => {
         if (!s[k]) return;
         const byYear = {};
-        s[k].rows.forEach(r => { byYear[r.end.slice(0, 4)] = r.val; });
+        s[k].rows.forEach(r => { byYear[r.year || r.end.slice(0, 4)] = r.val; });
         html += '<tr><td>' + s[k].label + '</td>';
         years.forEach(y => {
           const v = byYear[y];

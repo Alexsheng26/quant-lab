@@ -12,6 +12,39 @@
 
 > ⚠️ 本项目仅用于学习与研究，所有输出不构成任何投资建议。
 
+## 界面
+
+**行情** —— 手写 Canvas K 线，均线 / BOLL / 成交量 / MACD / RSI 副图，日K·周K·月K 切换
+
+![行情页](assets/screenshots/01-market.png)
+
+<table>
+<tr>
+<td width="50%"><b>AI 量化打分</b><br>五因子 0–100 评分、方向判断与三档技术参考位</td>
+<td width="50%"><b>策略回测</b><br>资金曲线对比基准，18 项绩效指标与逐笔交易</td>
+</tr>
+<tr>
+<td><img src="assets/screenshots/02-agent.png" alt="AI 量化打分"></td>
+<td><img src="assets/screenshots/04-backtest.png" alt="策略回测"></td>
+</tr>
+</table>
+
+**个股全景** —— 三个 Agent 协同：全市场分位（六边形雷达）、资讯扫描、SEC 公告财报
+
+![六边形雷达](assets/screenshots/03-panorama.png)
+
+![新闻与研究 Agent](assets/screenshots/03b-agents.png)
+
+<table>
+<tr>
+<td width="42%"><b>移动端</b><br>窄屏下自选变成顶部横滑条，把宽度还给图表</td>
+<td width="58%"><img src="assets/screenshots/05-mobile.png" alt="移动端" width="300"></td>
+</tr>
+</table>
+
+> 截图由 `backend/build_screenshots.py`（Playwright）生成，UI 改动后一条命令即可重出，
+> 避免 README 里挂着几个版本前的界面。
+
 ## 功能
 
 | 模块 | 说明 |

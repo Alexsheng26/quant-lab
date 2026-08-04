@@ -177,38 +177,56 @@ CONCEPTS = [
 ]
 
 
+def _is_annual(record: Dict[str, Any]) -> bool:
+    """
+    判断一条 XBRL 记录是不是**年度**数据。
+
+    这里是整个模块最容易出错的地方：一份 10-K 里同时包含年度数字和
+    季度对比数字，而 `fp == "FY"` 描述的是**申报文件**的周期，不是数据点的。
+    只靠 fp 过滤会把 Q1/Q2/Q3 的数字当成年报——NVDA 就中招了，
+    FY2020 全年营收 109 亿被显示成 30 亿（其实是 Q3 单季）。
+
+    正确做法是看期间长度：
+      · 有 start 的是期间值（营收、净利），年度约 365 天
+      · 没有 start 的是时点值（总资产、股东权益），本身就按年报口径取
+    """
+    if record.get("form") not in ("10-K", "20-F"):
+        return False
+    start, end = record.get("start"), record.get("end")
+    if not start:
+        return True                                   # 时点值
+    if not end:
+        return False
+    return 300 <= _days(start, end) <= 400            # 年度期间
+
+
 def _annual_series(facts: Dict[str, Any], tags: List[str], max_years: int = 6) -> List[Dict[str, Any]]:
-    """从 companyfacts 里取某个概念的年度序列（优先 10-K 的 FY 数据）。"""
+    """从 companyfacts 里取某个概念的年度序列。"""
     us_gaap = facts.get("facts", {}).get("us-gaap", {})
     for tag in tags:
         node = us_gaap.get(tag)
         if not node:
             continue
         for unit_name, records in node.get("units", {}).items():
-            annual = [
-                r for r in records
-                if r.get("form") in ("10-K", "20-F") and r.get("fp") == "FY" and r.get("frame")
-            ]
-            # 有 frame 标记的是 SEC 归一化过的年度值，最干净；没有就退回按期间长度筛
-            if not annual:
-                annual = [
-                    r for r in records
-                    if r.get("form") in ("10-K", "20-F") and r.get("start") and r.get("end")
-                    and 300 <= _days(r["start"], r["end"]) <= 400
-                ]
-            if not annual:
-                # 资产负债表科目是时点值，没有 start
-                annual = [r for r in records if r.get("form") in ("10-K", "20-F") and not r.get("start")]
+            annual = [r for r in records if _is_annual(r)]
             if not annual:
                 continue
 
-            # 同一年可能有多条（原报 + 重述），按 end 去重保留最后申报的
+            # 一个财年可能有多条（原报 + 后续重述），按 end 去重保留最晚申报的。
+            # 再按 end 所在年份收一次：财年跨年的公司（NVDA 财年一月底结束）
+            # 否则会出现两个同名年份列。
             by_end: Dict[str, Dict[str, Any]] = {}
             for r in sorted(annual, key=lambda x: (x["end"], x.get("filed", ""))):
                 by_end[r["end"]] = r
+
+            by_year: Dict[str, Dict[str, Any]] = {}
+            for r in sorted(by_end.values(), key=lambda x: x["end"]):
+                by_year[r["end"][:4]] = r             # 同年取最晚的那条
+
             out = [
-                {"end": r["end"], "fy": r.get("fy"), "val": r["val"], "unit": unit_name, "tag": tag}
-                for r in sorted(by_end.values(), key=lambda x: x["end"])
+                {"end": r["end"], "year": r["end"][:4], "fy": r.get("fy"),
+                 "val": r["val"], "unit": unit_name, "tag": tag}
+                for r in sorted(by_year.values(), key=lambda x: x["end"])
             ][-max_years:]
             if out:
                 return out
