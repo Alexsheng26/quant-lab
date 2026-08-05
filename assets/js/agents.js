@@ -44,6 +44,30 @@ QL.agents = (function () {
 
   const fmtPct = v => v == null ? '—' : v.toFixed(0);
 
+  /**
+   * 六边形图是纯 Canvas 画的，屏幕阅读器读不到形状。
+   * 这里把每根轴的分位数写成一句话挂到 aria-label 上，
+   * 读屏用户听到的信息量和看图的人一致。
+   */
+  function describeRadar(symbol, res) {
+    const cv = $('#radarChart');
+    if (!cv) return;
+    const known = (res.axes || []).filter(a => a.marketPct != null);
+    if (!known.length) {
+      cv.setAttribute('aria-label', '六边形分位雷达图，暂无数据');
+      return;
+    }
+    const parts = known.map(a =>
+      a.label + ' 全市场分位 ' + fmtPct(a.marketPct) +
+      (a.sectorPct == null ? '' : '、同行业分位 ' + fmtPct(a.sectorPct)));
+    const v = res.verdict || {};
+    cv.setAttribute('aria-label',
+      symbol + ' 六边形分位雷达图，' + known.length + ' 个维度：' + parts.join('；') +
+      '。分位越高越好，100 为全市场最优。' +
+      (v.tag ? '结论：' + v.tag + '。' : '') +
+      '同样的数字也列在下方「各维度分位」里。');
+  }
+
   /** 指标英文名 -> 中文 */
   const METRIC_CN = {
     trailingPE: '市盈率 TTM', forwardPE: '预期市盈率', priceToBook: '市净率',
@@ -82,6 +106,7 @@ QL.agents = (function () {
     if (!res.ok) {
       $('#quantVerdict').innerHTML = '<span class="muted">无法计算：' + (res.reason || '未知原因') + '</span>';
       radar.setData([]);
+      $('#radarChart').setAttribute('aria-label', '六边形分位雷达图，暂无数据');
       return;
     }
 
@@ -93,6 +118,7 @@ QL.agents = (function () {
     radar.setData(res.axes.map(a => ({
       label: a.label, value: a.marketPct, sector: a.sectorPct
     })));
+    describeRadar(symbol, res);
 
     const v = res.verdict || {};
     $('#quantVerdict').innerHTML =

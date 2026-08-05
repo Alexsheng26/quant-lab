@@ -10,12 +10,16 @@
   --border:      #232a3a;
   --text:        #d8dee9;
   --text-dim:    #8b95a8;
-  --text-faint:  #5a6479;
+  /* 原值 #5a6479 在三种背景上只有 2.73~3.25:1，低于 WCAG AA 要求的 4.5:1。
+     axe-core 实测有 34 处正文因此不达标（标签、表头、页脚等）。
+     调亮到这个值后对所有背景都过线，观感差别很小。 */
+  --text-faint:  #828da3;
 
   --up:          #26a69a;   /* 美股习惯：绿涨红跌 */
   --down:        #ef5350;
   --accent:      #4c8dff;
   --accent-dim:  #2b4b8a;
+  --on-accent:   #0b0e14;   /* 压在 accent/up/down 实心块上的文字色，见「按钮」一节 */
   --warn:        #f0a742;
 
   --radius: 8px;
@@ -35,6 +39,61 @@ body {
 }
 
 .hidden { display: none !important; }
+
+/* ---------------- 键盘可访问性 ---------------- */
+
+/* 只在键盘操作时显示焦点环：鼠标点击不该出现，否则观感差；
+   但键盘用户没有它就完全不知道焦点在哪。:focus-visible 正好区分这两种情况。 */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.tab:focus-visible { outline-offset: -2px; }
+/* 跳转链接的落点本身不该画焦点框——它只是个容器，画出来像是选中了整块内容 */
+.main:focus { outline: none; }
+
+/* 跳转链接：键盘用户不必逐个 Tab 过顶栏和自选列表才能到主内容 */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -60px;                       /* 平时移出视口，聚焦时滑下来 */
+  z-index: 999;
+  padding: 9px 16px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 0 0 6px 6px;
+  text-decoration: none;
+  transition: top .15s;
+}
+.skip-link:focus { top: 0; }
+
+/* 可滚动区域拿到焦点时给个提示（axe 的 scrollable-region-focusable 规则） */
+.table-wrap:focus-visible,
+.news-list:focus-visible,
+.filing-list:focus-visible { outline-offset: -2px; }
+
+/* 只读给屏幕阅读器的文本 */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 尊重系统的「减少动效」设置 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
 .muted  { color: var(--text-dim); font-weight: 400; }
 .num    { text-align: right; font-family: var(--mono); }
 .up     { color: var(--up); }
@@ -345,11 +404,20 @@ body {
 .btn.active { background: var(--accent-dim); color: #fff; border-color: var(--accent); }
 .btn-sm     { padding: 4px 10px; font-size: 12px; }
 .btn-ghost  { background: transparent; }
-.btn-primary{ background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
-.btn-primary:hover { background: #5d9aff; color: #fff; }
-.btn-buy    { background: var(--up);   border-color: var(--up);   color: #fff; flex: 1; font-weight: 600; }
-.btn-sell   { background: var(--down); border-color: var(--down); color: #fff; flex: 1; font-weight: 600; }
-.btn-buy:hover, .btn-sell:hover { opacity: .88; color: #fff; }
+/* 实心按钮用深色字而不是白字。白字压在 #4c8dff / #26a69a / #ef5350 上只有
+   3.0~3.5:1，达不到 WCAG AA 的 4.5:1；而压暗底色会把涨绿跌红这两个语义色
+   一起改掉（图表、报价、分位条都在用）。改成深色字后是 5.5~6.4:1，
+   品牌色一个都不用动。 */
+.btn-primary{ background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn-buy    { background: var(--up);   border-color: var(--up);   color: var(--on-accent); flex: 1; font-weight: 600; }
+.btn-sell   { background: var(--down); border-color: var(--down); color: var(--on-accent); flex: 1; font-weight: 600; }
+/* hover 提亮底色 —— 深色字下「更亮」才等于「更醒目」，
+   原来的 opacity:.88 会让底色往背景色靠，反而降低对比度。
+   背景和文字色必须在这里重新声明一遍：.btn:hover 的特异度是 (0,2,0)，
+   高于 .btn-primary 的 (0,1,0)，只写 filter 的话一悬停就被打回灰底白字。 */
+.btn-primary:hover { background: var(--accent); color: var(--on-accent); filter: brightness(1.12); }
+.btn-buy:hover     { background: var(--up);     color: var(--on-accent); filter: brightness(1.12); }
+.btn-sell:hover    { background: var(--down);   color: var(--on-accent); filter: brightness(1.12); }
 
 .toolbar { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
 .btn-group { display: flex; gap: 2px; }

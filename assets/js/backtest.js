@@ -332,6 +332,18 @@ QL.backtest = (function () {
       { name: '买入持有', values: bench, color: QL.chart.COLOR.bench, width: 1.2, dash: [4, 3] },
       { name: '策略',     values: eq,    color: QL.chart.COLOR.accent, width: 1.8, fill: true }
     ]);
+
+    // Canvas 的文字替代：把两条曲线的结局说清楚
+    const cv = $('#equityChart');
+    if (cv && eq.length) {
+      const s = eq[eq.length - 1] / eq[0] - 1;
+      const b = bench[bench.length - 1] / bench[0] - 1;
+      cv.setAttribute('aria-label',
+        '资金曲线对比图。策略最终收益 ' + U.fmtPct(s) +
+        '，买入持有基准 ' + U.fmtPct(b) +
+        '，' + (s > b ? '策略跑赢基准' : '策略跑输基准') +
+        ' ' + U.fmtPct(Math.abs(s - b)) + '。完整指标见下方「绩效指标」表格。');
+    }
   }
 
   function renderMetrics(m, b, bars, stratName, interval) {

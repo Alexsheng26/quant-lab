@@ -64,28 +64,33 @@ def main() -> int:
 
         shots = []
 
+        def shot(name, label):
+            """点击会把鼠标留在按钮上，:hover 样式会被拍进图里，
+               README 上看着像按钮坏了。截图前先把指针挪开。"""
+            page.mouse.move(0, 0)
+            page.wait_for_timeout(250)
+            shots.append((name, label))
+            page.screenshot(path=os.path.join(OUT_DIR, name))
+
         # ---- 1. 行情页（K 线 + MACD 副图 + BOLL）----
         page.click('.tab[data-view="market"]')
         page.click('#subGroup .btn[data-sub="macd"]')
         page.click('#maGroup .btn[data-ma="boll"]')
         page.click('#rangeGroup .btn[data-range="250"]')
         page.wait_for_timeout(1800)
-        shots.append(("01-market.png", "行情页"))
-        page.screenshot(path=os.path.join(OUT_DIR, "01-market.png"))
+        shot("01-market.png", "行情页")
 
         # ---- 2. AI 量化打分（评分环 + 因子条 + 参考价位）----
         page.click('.tab[data-view="agent"]')
         page.wait_for_timeout(600)
         page.click("#btnRunAgent")
         page.wait_for_timeout(2000)
-        shots.append(("02-agent.png", "AI 量化打分"))
-        page.screenshot(path=os.path.join(OUT_DIR, "02-agent.png"))
+        shot("02-agent.png", "AI 量化打分")
 
         # ---- 3. 个股全景 · 六边形雷达 ----
         page.click('.tab[data-view="panorama"]')
         page.wait_for_timeout(14000)          # 三个 Agent 并行，SEC 那边慢
-        shots.append(("03-panorama.png", "个股全景·雷达"))
-        page.screenshot(path=os.path.join(OUT_DIR, "03-panorama.png"))
+        shot("03-panorama.png", "个股全景·雷达")
 
         # ---- 3b. 往下滚，露出新闻 Agent 和研究 Agent ----
         # 雷达图在视口内，新闻和 SEC 财报在下面，单独截一张才看得到三个 Agent 协同
@@ -95,8 +100,7 @@ def main() -> int:
             window.scrollBy(0, -140);
         }""")
         page.wait_for_timeout(1200)
-        shots.append(("03b-agents.png", "新闻+研究 Agent"))
-        page.screenshot(path=os.path.join(OUT_DIR, "03b-agents.png"))
+        shot("03b-agents.png", "新闻+研究 Agent")
         page.evaluate("() => window.scrollTo(0, 0)")
 
         # ---- 4. 策略回测（资金曲线 + 绩效指标）----
@@ -104,8 +108,7 @@ def main() -> int:
         page.wait_for_timeout(600)
         page.click("#btnRunBacktest")
         page.wait_for_timeout(2500)
-        shots.append(("04-backtest.png", "策略回测"))
-        page.screenshot(path=os.path.join(OUT_DIR, "04-backtest.png"))
+        shot("04-backtest.png", "策略回测")
 
         # ---- 5. 移动端（证明窄屏可用）----
         mobile = browser.new_page(

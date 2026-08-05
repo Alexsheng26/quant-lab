@@ -405,6 +405,32 @@ ETF 和部分 ADR 不在 SEC 登记名录里，这时明确说明原因而不是
 绩效指标：总收益、年化收益（CAGR）、最大回撤、夏普比率、卡玛比率、年化波动、
 胜率、盈亏比、平均持有天数、仓位暴露、手续费合计、相对基准超额收益。
 
+## 无障碍
+
+目标 WCAG 2.1 AA。两个脚本可复现，不是"加几个 aria 属性就算数"：
+
+```bash
+python -m http.server 5710          # 另开一个窗口
+.venv\Scripts\python backend\audit_a11y.py       # axe-core，逐个标签页
+.venv\Scripts\python backend\audit_keyboard.py   # 纯键盘走查，19 项断言
+```
+
+当前结果：**axe-core 0 违规，键盘走查 19/19 通过**。首次审计的基线是 2 类问题共 195 处。
+
+做了什么：
+
+| 项 | 说明 |
+| --- | --- |
+| 对比度 | `--text-faint` 从 `#5a6479`（2.73:1）提到 `#828da3`；实心按钮改用深色字压在品牌色上（6.0～6.4:1），而不是压暗品牌色——涨绿跌红在图表里到处都是，不能为按钮改掉 |
+| 键盘导航 | 标签页用 WAI-ARIA 惯例：组内单一 tabindex，左右/Home/End 切换；搜索框下键进结果列表、上下移动、Enter 选中、Esc 关闭 |
+| 跳转链接 | 首个 Tab 位，跳过顶栏和自选列表直达 `#main` |
+| 焦点可见 | `:focus-visible`，只在键盘操作时画焦点环 |
+| 图表替代文本 | 三张 Canvas（K 线、资金曲线、六边形雷达）都带动态 `aria-label`，把图里的数字用一句话讲出来 |
+| 屏幕阅读器 | tablist/tabpanel、combobox/listbox、`aria-pressed`、toast 用 `role="status"`；滚动区域可聚焦 |
+| 减少动效 | 尊重 `prefers-reduced-motion` |
+
+两个脚本各自能抓到不同的东西：axe 只看静止状态的标记，抓不到"Tab 走不到"或"悬停时主按钮变回灰底"（后者对比度反而有 10.9:1，纯粹是视觉回归），所以悬停态断言单独写在 `audit_a11y.py` 里。
+
 ## 后续计划
 
 - [ ] 分钟级 / 盘中数据

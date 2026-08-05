@@ -109,13 +109,11 @@ QL.app = (function () {
 
   function renderDataMode() {
     const el = $('#dataMode');
-    if (QL.data.mode === 'live') {
-      el.textContent = 'LIVE 实时数据';
-      el.className = 'pill pill-live';
-    } else {
-      el.textContent = 'MOCK 模拟数据';
-      el.className = 'pill pill-mock';
-    }
+    const live = QL.data.mode === 'live';
+    el.textContent = live ? 'LIVE 实时数据' : 'MOCK 模拟数据';
+    el.className = 'pill ' + (live ? 'pill-live' : 'pill-mock');
+    el.setAttribute('aria-label',
+      '数据源：' + (live ? '后端实时数据' : '模拟数据') + '，点击切换');
   }
 
   function bindDataMode() {
@@ -236,6 +234,10 @@ QL.app = (function () {
     if (!box) {
       box = U.el('div');
       box.id = 'toast';
+      // 提示是瞬时出现的，屏幕阅读器用户看不到——标成 live region 才会被播报。
+      // status/polite 不打断当前朗读，适合非紧急信息。
+      box.setAttribute('role', 'status');
+      box.setAttribute('aria-live', 'polite');
       document.body.appendChild(box);
     }
     box.textContent = text;
@@ -248,6 +250,27 @@ QL.app = (function () {
 
   /* 交易所筛选：记在 localStorage，下次打开还是上次选的 */
   let searchEx = U.store.get(CFG.storeKeys.searchFilter, 'ALL');
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /** 搜索下拉的展开状态要同步给 aria-expanded，否则屏幕阅读器不知道有结果出现 */
+  let searchDismissed = false;   // 用户按过 Esc：在改动输入内容之前别再自动弹出来
+  function setSearchExpanded(open) {
+    const box = $('#searchResults');
+    box.classList.toggle('hidden', !open);
+    $('#symbolSearch').setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  /** Esc 关闭下拉。焦点要还回输入框，但输入框的 focus 处理器会重新搜索、
+      把刚关掉的下拉又弹开——所以用 searchDismissed 压住这一次。 */
+  function dismissSearch(refocus) {
+    searchDismissed = true;
+    setSearchExpanded(false);
+    if (refocus) $('#symbolSearch').focus();
+  }
 
   const EX_LABEL = {
     NASDAQ: 'NASDAQ', NYSE: 'NYSE', NYSEAMERICAN: 'NYSE MKT',
@@ -268,23 +291,39 @@ QL.app = (function () {
       }
       list.innerHTML = items.map(s => {
         const watched = QL.market.isWatched(s.symbol);
-        return '<div class="sr-row" data-sym="' + s.symbol + '">' +
+        return '<div class="sr-row" data-sym="' + s.symbol + '" role="option" tabindex="-1" ' +
+               'aria-label="' + s.symbol + ' ' + esc(s.name || '') + '">' +
             '<b>' + s.symbol + '</b>' +
             '<span class="sr-name">' + (s.name || '') + '</span>' +
             '<span class="sr-ex">' + (EX_LABEL[s.exchange] || s.exchange) +
               (s.etf ? ' · ETF' : '') + '</span>' +
             '<button class="sr-add' + (watched ? ' on' : '') + '" data-add="' + s.symbol + '" ' +
+              'aria-pressed="' + (watched ? 'true' : 'false') + '" ' +
+              'aria-label="' + (watched ? '将 ' + s.symbol + ' 移出自选' : '将 ' + s.symbol + ' 加入自选') + '" ' +
               'title="' + (watched ? '已在自选，点击移出' : '加入自选') + '">' +
               (watched ? '✓' : '+') + '</button>' +
           '</div>';
       }).join('');
 
       // 点行 = 打开标的；点 + = 只加自选，不切标的也不关面板
-      U.$$('#srList .sr-row').forEach(row => {
-        row.addEventListener('click', () => {
+      const rows = U.$$('#srList .sr-row');
+      rows.forEach((row, i) => {
+        const open = () => {
           input.value = '';
-          box.classList.add('hidden');
+          setSearchExpanded(false);
           setSymbol(row.dataset.sym);
+          input.focus();                    // 焦点别丢在已消失的下拉里
+        };
+        row.addEventListener('click', open);
+        row.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+          else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            (rows[i + 1] || rows[0]).focus();
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (i === 0) input.focus(); else rows[i - 1].focus();
+          } else if (e.key === 'Escape') { dismissSearch(true); }
         });
       });
       U.$$('#srList .sr-add').forEach(btn => {
@@ -295,6 +334,8 @@ QL.app = (function () {
           btn.classList.toggle('on', on);
           btn.textContent = on ? '✓' : '+';
           btn.title = on ? '已在自选，点击移出' : '加入自选';
+          btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+          btn.setAttribute('aria-label', (on ? '将 ' : '将 ') + sym + (on ? ' 移出自选' : ' 加入自选'));
           toast(on ? sym + ' 已加入自选' : sym + ' 已移出自选', null, 1600);
         });
       });
@@ -302,21 +343,27 @@ QL.app = (function () {
 
     const doSearch = U.debounce(async () => {
       const q = input.value.trim();
-      if (!q) { box.classList.add('hidden'); return; }
+      if (!q) { setSearchExpanded(false); return; }
+      if (searchDismissed) return;
       try {
         renderRows(await QL.data.search(q, 12, searchEx));
       } catch (e) {
         list.innerHTML = '<div class="sr-empty muted">搜索失败：' + e.message + '</div>';
       }
-      box.classList.remove('hidden');
+      if (searchDismissed) return;      // 等结果的这 160ms 里用户可能已经按了 Esc
+      setSearchExpanded(true);
     }, 160);
 
     // 筛选按钮
     U.$$('#srFilter .chip').forEach(chip => {
       chip.addEventListener('click', e => {
         e.stopPropagation();
-        U.$$('#srFilter .chip').forEach(c => c.classList.remove('active'));
+        U.$$('#srFilter .chip').forEach(c => {
+          c.classList.remove('active');
+          c.setAttribute('aria-pressed', 'false');
+        });
         chip.classList.add('active');
+        chip.setAttribute('aria-pressed', 'true');
         searchEx = chip.dataset.ex;
         U.store.set(CFG.storeKeys.searchFilter, searchEx);
         doSearch();
@@ -326,11 +373,15 @@ QL.app = (function () {
     // 恢复上次选的筛选
     const saved = $('#srFilter .chip[data-ex="' + searchEx + '"]');
     if (saved) {
-      U.$$('#srFilter .chip').forEach(c => c.classList.remove('active'));
+      U.$$('#srFilter .chip').forEach(c => {
+        c.classList.remove('active');
+        c.setAttribute('aria-pressed', 'false');
+      });
       saved.classList.add('active');
+      saved.setAttribute('aria-pressed', 'true');
     }
 
-    input.addEventListener('input', doSearch);
+    input.addEventListener('input', () => { searchDismissed = false; doSearch(); });
     input.addEventListener('focus', () => { if (input.value.trim()) doSearch(); });
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
@@ -338,28 +389,53 @@ QL.app = (function () {
         if (first) first.click();
         else setSymbol(input.value.trim().toUpperCase());
         input.value = '';
-        box.classList.add('hidden');
+        setSearchExpanded(false);
       }
-      if (e.key === 'Escape') { box.classList.add('hidden'); input.blur(); }
+      if (e.key === 'Escape') { dismissSearch(false); input.blur(); }
+      // 方向键从输入框进入结果列表，Enter 选中——纯键盘也能选股
+      if (e.key === 'ArrowDown') {
+        const first = list.querySelector('.sr-row');
+        if (first) { e.preventDefault(); first.focus(); }
+      }
     });
     document.addEventListener('click', e => {
-      if (!e.target.closest('.search-wrap')) box.classList.add('hidden');
+      if (!e.target.closest('.search-wrap')) setSearchExpanded(false);
     });
   }
 
   /* ---------------- 标签页 ---------------- */
 
+  function activateTab(tab, focus) {
+    U.$$('.tab').forEach(t => {
+      const on = t === tab;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      // 标签组内只留一个可 Tab 到的元素，组内用方向键移动（WAI-ARIA 惯例）
+      t.tabIndex = on ? 0 : -1;
+    });
+    U.$$('.view').forEach(v => v.classList.remove('active'));
+    view = tab.dataset.view;
+    $('#view-' + view).classList.add('active');
+    if (focus) tab.focus();
+    // Canvas 在隐藏容器里宽高为 0，切回来必须重绘
+    if (view === 'market') QL.market.renderChart();
+    U.bus.emit('view:change', view);
+  }
+
   function bindTabs() {
-    U.$$('.tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        U.$$('.tab').forEach(t => t.classList.remove('active'));
-        U.$$('.view').forEach(v => v.classList.remove('active'));
-        tab.classList.add('active');
-        view = tab.dataset.view;
-        $('#view-' + view).classList.add('active');
-        // Canvas 在隐藏容器里宽高为 0，切回来必须重绘
-        if (view === 'market') QL.market.renderChart();
-        U.bus.emit('view:change', view);
+    const tabs = U.$$('.tab');
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => activateTab(tab, false));
+
+      // 键盘：左右方向键在标签间移动，Home/End 跳首尾。
+      // 没有这个，键盘用户得一路 Tab 穿过每个标签才能到内容区。
+      tab.addEventListener('keydown', e => {
+        let next = null;
+        if (e.key === 'ArrowRight') next = tabs[(i + 1) % tabs.length];
+        else if (e.key === 'ArrowLeft') next = tabs[(i - 1 + tabs.length) % tabs.length];
+        else if (e.key === 'Home') next = tabs[0];
+        else if (e.key === 'End') next = tabs[tabs.length - 1];
+        if (next) { e.preventDefault(); activateTab(next, true); }
       });
     });
   }

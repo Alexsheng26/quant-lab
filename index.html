@@ -24,6 +24,8 @@
 </head>
 <body>
 
+<a href="#main" class="skip-link">跳到主内容</a>
+
 <!-- ============ 顶栏 ============ -->
 <header class="topbar">
   <div class="brand">
@@ -35,22 +37,27 @@
   </div>
 
   <div class="search-wrap">
-    <input id="symbolSearch" type="text" placeholder="搜索代码或公司名，如 AAPL / 英伟达 / 半导体" autocomplete="off" spellcheck="false">
+    <label for="symbolSearch" class="sr-only">搜索美股代码或公司名</label>
+    <input id="symbolSearch" type="text" placeholder="搜索代码或公司名，如 AAPL / 英伟达 / 半导体"
+           autocomplete="off" spellcheck="false"
+           role="combobox" aria-expanded="false" aria-controls="srList" aria-autocomplete="list">
     <div id="searchResults" class="search-results hidden">
-      <div class="sr-filter" id="srFilter">
-        <button class="chip active" data-ex="ALL">全部</button>
-        <button class="chip" data-ex="NASDAQ">纳斯达克</button>
-        <button class="chip" data-ex="NYSE">纽交所</button>
-        <button class="chip" data-ex="ETF">ETF</button>
+      <div class="sr-filter" id="srFilter" role="group" aria-label="按交易所筛选">
+        <button class="chip active" data-ex="ALL" aria-pressed="true">全部</button>
+        <button class="chip" data-ex="NASDAQ" aria-pressed="false">纳斯达克</button>
+        <button class="chip" data-ex="NYSE" aria-pressed="false">纽交所</button>
+        <button class="chip" data-ex="ETF" aria-pressed="false">ETF</button>
       </div>
-      <div class="sr-list" id="srList"></div>
+      <div class="sr-list" id="srList" role="listbox" aria-label="搜索结果"></div>
     </div>
   </div>
 
   <div class="topbar-right">
     <span id="clock" class="clock">--:--:--</span>
     <span id="marketStatus" class="pill pill-muted">美股状态</span>
-    <span id="dataMode" class="pill pill-mock" title="点击切换数据源（MOCK / LIVE）">MOCK 模拟数据</span>
+    <!-- 这个徽章是可点的开关，必须是 button 才能被键盘聚焦和触发 -->
+    <button id="dataMode" class="pill pill-mock" title="点击切换数据源（MOCK / LIVE）"
+            aria-label="数据源：模拟数据，点击切换">MOCK 模拟数据</button>
   </div>
 </header>
 
@@ -64,7 +71,7 @@
     想看真实美股行情：克隆仓库后在本机运行后端（一条命令），这个页面会自动连上。
     <a href="https://github.com/Alexsheng26/quant-lab#快速开始" target="_blank" rel="noopener">查看步骤 →</a>
   </div>
-  <button id="dbClose" class="db-close" title="不再显示">×</button>
+  <button id="dbClose" class="db-close" title="不再显示" aria-label="关闭此说明，不再显示">×</button>
 </div>
 
 <div class="layout">
@@ -83,7 +90,9 @@
   </aside>
 
   <!-- ============ 主区域 ============ -->
-  <main class="main">
+  <!-- tabindex="-1"：光有 id 时部分浏览器只滚动不移焦点，键盘用户点完跳转链接
+       再按 Tab 又会回到顶栏。加上它焦点才真的落进来。 -->
+  <main class="main" id="main" tabindex="-1">
 
     <!-- 标的头部 -->
     <section class="quote-head">
@@ -94,7 +103,7 @@
         <span id="qExchange" class="tag">—</span>
       </div>
       <div class="quote-price">
-        <span id="qLast" class="last">—</span>
+        <span id="qLast" class="last" aria-live="off">—</span>
         <span id="qChange" class="change">—</span>
       </div>
       <div class="quote-stats">
@@ -109,16 +118,18 @@
     </section>
 
     <!-- 标签页 -->
-    <nav class="tabs">
-      <button class="tab active" data-view="market">行情</button>
-      <button class="tab" data-view="agent">AI 量化打分</button>
-      <button class="tab" data-view="panorama">个股全景</button>
-      <button class="tab" data-view="backtest">策略回测</button>
-      <button class="tab" data-view="paper">模拟交易</button>
+    <!-- role=tablist 让屏幕阅读器把这里读成"5 个标签中的第 1 个"，
+         并启用左右方向键切换（键盘行为在 app.js 里实现） -->
+    <nav class="tabs" role="tablist" aria-label="功能视图">
+      <button class="tab active" data-view="market"   role="tab" id="tab-market"   aria-selected="true"  aria-controls="view-market">行情</button>
+      <button class="tab"        data-view="agent"    role="tab" id="tab-agent"    aria-selected="false" aria-controls="view-agent"    tabindex="-1">AI 量化打分</button>
+      <button class="tab"        data-view="panorama" role="tab" id="tab-panorama" aria-selected="false" aria-controls="view-panorama" tabindex="-1">个股全景</button>
+      <button class="tab"        data-view="backtest" role="tab" id="tab-backtest" aria-selected="false" aria-controls="view-backtest" tabindex="-1">策略回测</button>
+      <button class="tab"        data-view="paper"    role="tab" id="tab-paper"    aria-selected="false" aria-controls="view-paper"    tabindex="-1">模拟交易</button>
     </nav>
 
     <!-- ---------- 视图：行情 ---------- -->
-    <section class="view active" id="view-market">
+    <section class="view active" id="view-market" role="tabpanel" aria-labelledby="tab-market" tabindex="0">
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">K 线图</span>
@@ -147,8 +158,10 @@
             </div>
           </div>
         </div>
+        <!-- Canvas 对屏幕阅读器是完全不透明的，必须给文字替代。
+             内容由 market.js 随数据更新，不能只写一句静态说明。 -->
         <div class="chart-host">
-          <canvas id="mainChart"></canvas>
+          <canvas id="mainChart" role="img" aria-label="K 线图，加载中"></canvas>
           <div id="chartTip" class="chart-tip hidden"></div>
         </div>
       </div>
@@ -160,7 +173,7 @@
         </div>
         <div class="panel">
           <div class="panel-head"><span class="panel-title">逐笔成交（模拟撮合）</span></div>
-          <div class="table-wrap tape-wrap">
+          <div class="table-wrap tape-wrap" tabindex="0" role="region" aria-label="逐笔成交，可滚动">
             <table class="table" id="tapeTable">
               <thead><tr><th>时间</th><th class="num">价格</th><th class="num">数量</th><th>方向</th></tr></thead>
               <tbody></tbody>
@@ -171,7 +184,7 @@
     </section>
 
     <!-- ---------- 视图：AI 打分 ---------- -->
-    <section class="view" id="view-agent">
+    <section class="view" id="view-agent" role="tabpanel" aria-labelledby="tab-agent" tabindex="0">
       <div class="panel">
         <div class="panel-head">
           <span class="panel-title">量化分析 Agent</span>
@@ -236,7 +249,7 @@
     </section>
 
     <!-- ---------- 视图：个股全景（三个 Agent 协同） ---------- -->
-    <section class="view" id="view-panorama">
+    <section class="view" id="view-panorama" role="tabpanel" aria-labelledby="tab-panorama" tabindex="0">
       <div class="agent-bar">
         <span class="muted">三个 Agent 并行工作：全市场分位 · 资讯扫描 · 公告财报</span>
         <button id="btnRunPanorama" class="btn btn-primary btn-sm">运行全景分析</button>
@@ -249,7 +262,7 @@
           <span id="quantUniverse" class="muted"></span>
         </div>
         <div class="quant-body">
-          <div class="radar-host"><canvas id="radarChart"></canvas></div>
+          <div class="radar-host"><canvas id="radarChart" role="img" aria-label="六边形分位雷达图，运行分析后显示"></canvas></div>
           <div class="quant-side">
             <div id="quantVerdict" class="verdict"><span class="muted">点击「运行全景分析」</span></div>
             <div id="quantAxes" class="axis-list"></div>
@@ -260,7 +273,7 @@
             </div>
           </div>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="数据表格，可滚动">
           <table class="table" id="quantDetail">
             <thead><tr><th>指标</th><th class="num">数值</th><th class="num">全市场分位</th><th class="num">行业分位</th></tr></thead>
             <tbody><tr><td colspan="4" class="muted">—</td></tr></tbody>
@@ -281,7 +294,7 @@
           </div>
           <div id="newsAnswer" class="news-answer hidden"></div>
           <div id="newsSources" class="news-sources"></div>
-          <div id="newsList" class="news-list"><div class="muted pad">未加载</div></div>
+          <div id="newsList" class="news-list" tabindex="0" role="region" aria-label="新闻列表，可滚动"><div class="muted pad">未加载</div></div>
         </div>
 
         <!-- ③ 研究 Agent -->
@@ -291,7 +304,7 @@
             <span id="filingCompany" class="muted"></span>
           </div>
           <div id="financialSummary" class="fin-summary"></div>
-          <div id="filingList" class="filing-list"><div class="muted pad">未加载</div></div>
+          <div id="filingList" class="filing-list" tabindex="0" role="region" aria-label="SEC 申报列表，可滚动"><div class="muted pad">未加载</div></div>
         </div>
       </div>
 
@@ -302,7 +315,7 @@
     </section>
 
     <!-- ---------- 视图：回测 ---------- -->
-    <section class="view" id="view-backtest">
+    <section class="view" id="view-backtest" role="tabpanel" aria-labelledby="tab-backtest" tabindex="0">
       <div class="panel">
         <div class="panel-head"><span class="panel-title">回测参数</span></div>
         <div class="form-row">
@@ -343,7 +356,7 @@
           <span class="legend"><i class="dot dot-strategy"></i>策略 <i class="dot dot-bench"></i>买入持有</span>
         </div>
         <div class="chart-host chart-host-sm">
-          <canvas id="equityChart"></canvas>
+          <canvas id="equityChart" role="img" aria-label="资金曲线图，运行回测后显示"></canvas>
         </div>
       </div>
 
@@ -354,7 +367,7 @@
         </div>
         <div class="panel">
           <div class="panel-head"><span class="panel-title">交易记录</span></div>
-          <div class="table-wrap">
+          <div class="table-wrap" tabindex="0" role="region" aria-label="数据表格，可滚动">
             <table class="table" id="btTrades">
               <thead><tr><th>#</th><th>买入日</th><th class="num">买价</th><th>卖出日</th><th class="num">卖价</th><th class="num">收益</th><th class="num">持有</th></tr></thead>
               <tbody><tr><td colspan="7" class="muted">—</td></tr></tbody>
@@ -365,7 +378,7 @@
     </section>
 
     <!-- ---------- 视图：模拟交易 ---------- -->
-    <section class="view" id="view-paper">
+    <section class="view" id="view-paper" role="tabpanel" aria-labelledby="tab-paper" tabindex="0">
       <div class="account-cards">
         <div class="acc-card"><label>总资产</label><span id="accTotal">—</span></div>
         <div class="acc-card"><label>可用现金</label><span id="accCash">—</span></div>
@@ -399,7 +412,7 @@
             <span class="panel-title">当前持仓</span>
             <button id="btnResetAccount" class="btn btn-ghost btn-sm">重置账户</button>
           </div>
-          <div class="table-wrap">
+          <div class="table-wrap" tabindex="0" role="region" aria-label="数据表格，可滚动">
             <table class="table" id="posTable">
               <thead><tr><th>代码</th><th class="num">数量</th><th class="num">成本</th><th class="num">现价</th><th class="num">市值</th><th class="num">浮动盈亏</th></tr></thead>
               <tbody><tr><td colspan="6" class="muted">暂无持仓</td></tr></tbody>
@@ -410,7 +423,7 @@
 
       <div class="panel">
         <div class="panel-head"><span class="panel-title">成交流水</span></div>
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="数据表格，可滚动">
           <table class="table" id="orderTable">
             <thead><tr><th>时间</th><th>代码</th><th>方向</th><th class="num">价格</th><th class="num">数量</th><th class="num">金额</th></tr></thead>
             <tbody><tr><td colspan="6" class="muted">暂无记录</td></tr></tbody>

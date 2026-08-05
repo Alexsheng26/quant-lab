@@ -67,7 +67,7 @@ QL.market = (function () {
           '<div class="' + chgCls + '">' + (q ? U.fmtPrice(q.last) : '—') + '</div>' +
           '<div class="wl-chg ' + chgCls + '">' + (q ? U.fmtPct(q.changePct) : '') + '</div>' +
         '</div>' +
-        '<button class="wl-del" title="移出自选">×</button>';
+        '<button class="wl-del" title="移出自选" aria-label="将 ' + sym + ' 移出自选">×</button>';
 
       li.addEventListener('click', () => QL.app.setSymbol(sym));
       li.querySelector('.wl-del').addEventListener('click', e => {
@@ -129,6 +129,10 @@ QL.market = (function () {
       star.textContent = on ? '★' : '☆';
       star.classList.toggle('on', on);
       star.title = on ? '移出自选' : '加入自选';
+      // ★/☆ 这种符号读出来是"黑星/白星"，毫无意义，必须给真正的标签
+      star.setAttribute('aria-label',
+        (on ? '将 ' + (sym || '当前标的') + ' 移出自选' : '将 ' + (sym || '当前标的') + ' 加入自选'));
+      star.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
     const btn = $('#btnAddWatch');
     if (btn) btn.textContent = on ? '✓ 已在自选' : '+ 加入自选';
@@ -272,7 +276,36 @@ QL.market = (function () {
   }
 
   function renderChart() {
-    chart.setBars(activeBars());
+    const bars = activeBars();
+    chart.setBars(bars);
+    describeChart(bars);
+  }
+
+  /**
+   * 给 K 线画布写文字替代。
+   *
+   * Canvas 对屏幕阅读器是一个黑盒——不描述的话，整个页面最核心的信息
+   * 对视障用户等于不存在。这里把区间、涨跌、极值浓缩成一句话。
+   */
+  function describeChart(bars) {
+    const cv = $('#mainChart');
+    if (!cv) return;
+    if (!bars || !bars.length) {
+      cv.setAttribute('aria-label', 'K 线图，暂无数据');
+      return;
+    }
+    const first = bars[0], last = bars[bars.length - 1];
+    const chg = first.close ? (last.close / first.close - 1) * 100 : 0;
+    let hi = -Infinity, lo = Infinity;
+    bars.forEach(b => { if (b.high > hi) hi = b.high; if (b.low < lo) lo = b.low; });
+
+    cv.setAttribute('aria-label',
+      (QL.state.symbol || '') + ' ' + INTERVAL_LABEL[interval] + 'K 线图，' +
+      bars.length + ' 根，' + first.date + ' 至 ' + last.date + '。' +
+      '区间' + (chg >= 0 ? '上涨' : '下跌') + Math.abs(chg).toFixed(1) + '%，' +
+      '最新收盘 ' + U.fmtPrice(last.close) + '，' +
+      '最高 ' + U.fmtPrice(hi) + '，最低 ' + U.fmtPrice(lo) + '。' +
+      '详细数值见下方「技术指标快照」表格。');
   }
 
   /* ---------------- 事件绑定 ---------------- */
