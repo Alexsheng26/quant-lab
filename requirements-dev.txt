@@ -1,0 +1,14 @@
+# 测试与审计用的依赖。
+#
+# 刻意不装 backend/requirements.txt 的全部内容：yfinance / akshare / anthropic
+# 在代码里都是惰性导入（用到时才 import），单元测试全程 mock 掉数据源，
+# 所以 CI 装这几个就够，能省掉几分钟的依赖解析。
+#
+#   pip install -r requirements-dev.txt
+#   python -m playwright install --with-deps chromium
+
+fastapi
+httpx
+requests
+pytest
+playwright

@@ -252,7 +252,10 @@ QL.ind = (function () {
     if (rets.length < 2) return 0;
     const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
     const vol = annualVol(rets, periods);
-    if (vol === 0) return 0;
+    // 不能只判 vol === 0：收益率完全恒定时，浮点误差会让方差算成 ~1e-38
+    // 而不是干净的 0，开方年化后是 ~5e-19，除下去得到 2e16 这种荒谬的夏普
+    // 直接显示给用户。任何真实策略的年化波动都远大于 1e-9。
+    if (!isFinite(vol) || vol < 1e-9) return 0;
     return (mean * periods - rf) / vol;
   }
 

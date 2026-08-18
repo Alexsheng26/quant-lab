@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 # .env 只在本地开发用；生产环境直接设环境变量
@@ -30,6 +31,26 @@ MODEL = "claude-opus-5"
 
 _client = None
 _init_error: Optional[str] = None
+
+
+# 形如 sk-ant-api03-xxxxx 的串
+_KEY_RE = re.compile(r"sk-ant-[A-Za-z0-9_\-]{8,}")
+
+
+def _scrub(text: str) -> str:
+    """把可能出现在错误消息里的 API Key 抹掉再往外传。
+
+    上游异常的 message 不受我们控制：认证失败、代理报错、连接超时都可能
+    把 Key 或带 Key 的请求头一起塞进去。这些 reason 会直接显示在前端页面上，
+    所以出栈前统一过一遍。宁可信息少一点，也不能把 Key 印到浏览器里。
+    """
+    if not text:
+        return text
+    out = _KEY_RE.sub("sk-ant-***", text)
+    real = os.environ.get("ANTHROPIC_API_KEY")
+    if real and len(real) >= 8:
+        out = out.replace(real, "***")
+    return out
 
 
 def _get_client():
@@ -48,7 +69,7 @@ def _get_client():
     except ImportError:
         _init_error = "未安装 anthropic 包（pip install anthropic）"
     except Exception as exc:                          # noqa: BLE001
-        _init_error = f"{type(exc).__name__}: {exc}"
+        _init_error = _scrub(f"{type(exc).__name__}: {exc}")
     return _client
 
 
@@ -62,7 +83,7 @@ def status() -> Dict[str, Any]:
     return {
         "enabled": ok,
         "model": MODEL if ok else None,
-        "reason": None if ok else (_init_error or "未知原因"),
+        "reason": None if ok else _scrub(_init_error or "未知原因"),
     }
 
 
@@ -150,7 +171,7 @@ def answer_from_news(symbol: str, question: str,
         )
     except Exception as exc:                          # noqa: BLE001
         return {"ok": False, "mode": "retrieval",
-                "reason": f"{type(exc).__name__}: {exc}"}
+                "reason": _scrub(f"{type(exc).__name__}: {exc}")}
 
     # 安全分类器可能拒答；先看 stop_reason 再读 content
     if resp.stop_reason == "refusal":

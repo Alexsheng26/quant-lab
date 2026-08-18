@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>QuantLab 前端单元测试</title>
+<style>
+  body { font: 13px/1.6 monospace; background: #0b0e14; color: #d8dee9; padding: 20px; }
+  .pass { color: #26a69a; }
+  .fail { color: #ef5350; }
+  h2 { font-size: 13px; color: #828da3; margin: 14px 0 4px; }
+</style>
+</head>
+<body>
+<h1 id="summary">运行中…</h1>
+<div id="out"></div>
+
+<!--
+  加载真实源文件，不是副本。路径相对 tests/js/。
+  只加载纯逻辑模块：config / utils / indicators / backtest。
+  backtest.js 的 init() 才碰 DOM，模块加载阶段不会。
+-->
+<script src="../../assets/js/config.js"></script>
+<script src="../../assets/js/utils.js"></script>
+<script src="../../assets/js/indicators.js"></script>
+<script src="../../assets/js/backtest.js"></script>
+<script src="./suite.js"></script>
+
+<script>
+  (function () {
+    const r = window.__QL_TEST_RESULTS__ || [];
+    const failed = r.filter(x => !x.ok);
+    document.getElementById('summary').textContent =
+      `${r.length - failed.length}/${r.length} 通过` + (failed.length ? `，${failed.length} 失败` : '');
+
+    let html = '', group = null;
+    for (const t of r) {
+      if (t.group !== group) { group = t.group; html += `<h2>${group}</h2>`; }
+      html += t.ok
+        ? `<div class="pass">  PASS  ${t.name}</div>`
+        : `<div class="fail">  FAIL  ${t.name}<br>        ${t.message}</div>`;
+    }
+    document.getElementById('out').innerHTML = html;
+  })();
+</script>
+</body>
+</html>

@@ -3,9 +3,11 @@
 一个零依赖的纯前端量化研究工作台：行情看盘、策略回测、模拟交易，外加一个可解释的量化打分 Agent。
 数据层做了适配抽象，既能用内置的行情模拟引擎离线跑，也能切到后端接真实美股数据。
 
+[![CI](https://github.com/Alexsheng26/quant-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/Alexsheng26/quant-lab/actions/workflows/ci.yml)
 [![Deploy](https://github.com/Alexsheng26/quant-lab/actions/workflows/pages.yml/badge.svg)](https://github.com/Alexsheng26/quant-lab/actions/workflows/pages.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![No dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
+![WCAG 2.1 AA](https://img.shields.io/badge/a11y-WCAG%202.1%20AA-brightgreen)
 
 **🔗 在线 Demo：<https://alexsheng26.github.io/quant-lab/>**
 （浏览器直接打开，跑内置模拟引擎；想看真实行情见下方「托管与部署」）
@@ -404,6 +406,49 @@ ETF 和部分 ADR 不在 SEC 登记名录里，这时明确说明原因而不是
 
 绩效指标：总收益、年化收益（CAGR）、最大回撤、夏普比率、卡玛比率、年化波动、
 胜率、盈亏比、平均持有天数、仓位暴露、手续费合计、相对基准超额收益。
+
+## 测试
+
+117 个测试，4 秒跑完，不联网。
+
+```bash
+pip install -r requirements-dev.txt
+python -m playwright install chromium
+python -m pytest
+```
+
+只跑后端逻辑（不需要浏览器，1.5 秒）：
+
+```bash
+python -m pytest -m "not js and not a11y"
+```
+
+| 文件 | 覆盖 |
+| --- | --- |
+| `tests/test_research.py` | SEC XBRL 年报识别、重述去重、CIK 类别股回退 |
+| `tests/test_fundamentals.py` | 分位排名、3×3 判定表九格、盈利/成长背离、总分门槛 |
+| `tests/test_search.py` | 排序优先级、杠杆产品降权的词边界、别名表、响应投影 |
+| `tests/test_llm.py` | Key 脱敏、四条降级路径、提示注入隔离、模型参数 |
+| `tests/test_api.py` | 路由与响应模型校验、限流、CORS |
+| `tests/test_js.py` + `tests/js/` | 前端纯函数：指标、回测引擎、绩效统计 |
+
+**前端测试为什么在浏览器里跑**：项目是零依赖的经典 `<script>` 结构，没有
+package.json 也没有模块系统。与其为了测试引入整套 npm 工具链，不如直接用
+Playwright（无障碍审计已经在用）加载 `assets/js/` 里的**真实源文件**，
+在 Chromium 里跑断言——那本来就是这些代码的运行环境。本地和 CI 都只需要
+Python 一套工具链。
+
+测试全程 mock 掉数据源，`conftest.py` 会拦截任何连非回环地址的请求，
+所以 SEC / Yahoo 抖动不会让 CI 随机变红。
+
+写这批测试时抓到三个真实 bug，都已修复：
+
+- `llm.py` 把上游异常消息原样回传给前端。SDK 的认证错误里可能带着 API Key，
+  等于把密钥打印到浏览器上。现在所有出栈的错误文本都过一遍 `_scrub()`。
+- `indicators.js` 的夏普比率在收益率近乎恒定时失控。`vol === 0` 拦不住浮点误差
+  留下的 ~1e-19，除下去得到 2×10¹⁶ 这种数字直接显示给用户。
+- 回测引擎把未平仓持仓也记为一条 trade（`open: true`）——行为是对的，
+  但没有测试钉住，很容易在重构时被改坏。
 
 ## 无障碍
 

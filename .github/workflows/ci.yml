@@ -1,0 +1,121 @@
+# 持续集成
+#
+# 三个 job，故意分开，这样红灯能一眼看出是哪一类问题：
+#   unit      —— 后端纯逻辑，多版本 Python + Windows，最快也最该常绿
+#   frontend  —— 前端 JS 单元测试，在真实 Chromium 里跑
+#   a11y      —— 无障碍审计（axe-core + 键盘走查）
+#
+# 依赖装的是 requirements-dev.txt 而不是 backend/requirements.txt：
+# yfinance / akshare / anthropic 在代码里都是惰性导入，测试全程 mock 掉数据源，
+# 不装它们能省几分钟依赖解析。
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: 后端单元测试 (py${{ matrix.python }} ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ['3.11', '3.12', '3.13']
+        include:
+          # 开发机是 Windows，路径分隔符和默认编码都不一样，跑一遍兜底
+          - os: windows-latest
+            python: '3.12'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: 装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: 跑测试（跳过需要浏览器的）
+        run: python -m pytest -m "not js and not a11y" -v
+
+  frontend:
+    name: 前端 JS 单元测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: 装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: 装 Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: 跑前端测试
+        run: python -m pytest -m js -v
+
+  a11y:
+    name: 无障碍审计
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: 装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: 装 Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: 起静态服务
+        run: |
+          # nohup + 重定向，确保它能活过这个 step（后续 step 是新的 shell）
+          nohup python -m http.server 5710 > /tmp/http.log 2>&1 &
+          # 等端口真的能连上再往下走，避免竞态
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:5710/index.html -o /dev/null; then
+              echo "静态服务已就绪"; exit 0
+            fi
+            sleep 1
+          done
+          echo "静态服务起不来"; exit 1
+
+      - name: 键盘走查
+        run: python backend/audit_keyboard.py
+
+      - name: axe-core 审计
+        # 审计脚本零违规时返回 0，有违规时也返回 0（它是报告工具），
+        # 所以这里显式检查输出里有没有"未发现"字样。
+        run: |
+          out=$(python backend/audit_a11y.py --url http://127.0.0.1:5710/index.html)
+          echo "$out"
+          echo "$out" | grep -q "未发现 WCAG 2.1 A/AA 违规" || {
+            echo "::error::axe-core 发现了无障碍违规"; exit 1; }

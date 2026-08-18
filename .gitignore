@@ -13,6 +13,11 @@ venv/
 env/
 *.egg-info/
 
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
 # 数据缓存
 backend/cache/
 *.csv
