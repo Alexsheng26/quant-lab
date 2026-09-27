@@ -22,6 +22,10 @@ QL.chart = (function () {
     ma20:   '#4c8dff',
     ma60:   '#c77dff',
     boll:   'rgba(139,149,168,.55)',
+    fib:     'rgba(240,167,66,.5)',
+    fibKey:  '#f0a742',              // 61.8% 黄金分割线，画得比其他档醒目
+    fibZone: 'rgba(240,167,66,.06)', // 38.2%~61.8% 的黄金回撤区
+    fibChip: 'rgba(11,14,20,.82)',   // 标签底衬，压在 K 线上也读得清
     dif:    '#f0a742',
     dea:    '#4c8dff',
     rsi:    '#c77dff',
@@ -78,7 +82,8 @@ QL.chart = (function () {
       this.canvas = canvas;
       this.tip = tipEl;
       this.bars = [];
-      this.mas = { 5: true, 20: true, 60: true, boll: false };
+      // 主图叠加层的开关。boll 和 fib 都不是均线，但共用同一组工具栏按钮
+      this.mas = { 5: true, 20: true, 60: true, boll: false, fib: false };
       this.sub = 'vol';
       this.hover = -1;
 
@@ -185,6 +190,11 @@ QL.chart = (function () {
         ctx.fillText(bars[idx].date.slice(2), x, h - PAD.bottom + 6);
       }
 
+      /* ---- 斐波那契回撤 ----
+         画在 K 线之前，让蜡烛压在线上面，不然回撤线会盖住实体 */
+      const fibData = this.mas.fib ? IND.fib(bars) : null;
+      if (fibData) this._drawFib(ctx, g, yOf, fibData);
+
       /* ---- K 线 ---- */
       const step = g.plotW / bars.length;
       const cw = Math.max(1, Math.min(14, step * 0.68));
@@ -219,6 +229,10 @@ QL.chart = (function () {
         const pts = o.v.map((v, i) => v == null ? null : [this._xOf(i, g), yOf(v)]);
         line(ctx, pts, o.c, 1.3, o.dash);
       });
+
+      /* ---- 斐波那契标签 ----
+         线在 K 线之下、标签在 K 线之上，价格数字才不会被蜡烛盖掉 */
+      if (fibData) this._drawFibLabels(ctx, g, yOf, fibData);
 
       /* ---- 图例 ---- */
       ctx.textAlign = 'left';
@@ -270,6 +284,61 @@ QL.chart = (function () {
       } else {
         this._hideTip();
       }
+    }
+
+    /**
+     * 斐波那契回撤 —— 底层：黄金回撤区的色带 + 各档横线。
+     *
+     * 刻意和标签分成两次画：线要压在 K 线**下面**（否则横线会切断蜡烛实体），
+     * 标签要浮在 K 线**上面**（否则价格数字被蜡烛盖住，读不出来）。
+     */
+    _drawFib(ctx, g, yOf, f) {
+      const byRatio = {};
+      f.levels.forEach(l => { byRatio[l.ratio] = l; });
+
+      // 38.2%~61.8% 是交易员最常盯的回撤区间，浅浅铺一层底色
+      const z1 = byRatio[0.382], z2 = byRatio[0.618];
+      if (z1 && z2) {
+        const ya = yOf(z1.price), yb = yOf(z2.price);
+        ctx.fillStyle = COLOR.fibZone;
+        ctx.fillRect(g.plotL, Math.min(ya, yb), g.plotW, Math.abs(yb - ya));
+      }
+
+      f.levels.forEach(l => {
+        const y = Math.round(yOf(l.price)) + 0.5;
+        // 0% / 100% 是摆动端点本身，用实线；中间各档用虚线区分
+        const edge = l.ratio === 0 || l.ratio === 1;
+        line(ctx, [[g.plotL, y], [g.plotR, y]],
+             l.key ? COLOR.fibKey : COLOR.fib,
+             l.key ? 1.4 : 1,
+             edge ? null : [4, 4]);
+      });
+    }
+
+    /** 斐波那契回撤 —— 顶层：比例与价格标签，画在 K 线之后 */
+    _drawFibLabels(ctx, g, yOf, f) {
+      ctx.save();
+      ctx.font = '10px "SF Mono", Consolas, monospace';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+
+      f.levels.forEach(l => {
+        const y = Math.round(yOf(l.price)) + 0.5;
+        const txt = l.label + '  ' + l.price.toFixed(2);
+        const tw = ctx.measureText(txt).width;
+        ctx.fillStyle = COLOR.fibChip;
+        ctx.fillRect(g.plotL + 2, y - 7, tw + 8, 14);
+        ctx.fillStyle = l.key ? COLOR.fibKey : COLOR.text;
+        ctx.fillText(txt, g.plotL + 6, y);
+      });
+
+      // 说明这段回撤是按哪个方向量的，否则 0% 在上还是在下会让人困惑
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = COLOR.fibKey;
+      ctx.fillText('FIB ' + (f.trend === 'up' ? '↑ 低→高' : '↓ 高→低'),
+                   g.plotR - 4, g.mainT + 2);
+      ctx.restore();
     }
 
     _drawSub(ctx, g, bars, closes) {

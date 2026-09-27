@@ -145,11 +145,15 @@
               <button class="btn btn-sm" data-range="250">1Y</button>
               <button class="btn btn-sm" data-range="0">全部</button>
             </div>
+            <!-- 这一组是"开关"而不是"单选"，所以每个都要 aria-pressed：
+                 光靠 .active 的视觉高亮，屏幕阅读器读不出哪几条线是开着的 -->
             <div class="btn-group" id="maGroup">
-              <button class="btn btn-sm active" data-ma="5">MA5</button>
-              <button class="btn btn-sm active" data-ma="20">MA20</button>
-              <button class="btn btn-sm active" data-ma="60">MA60</button>
-              <button class="btn btn-sm" data-ma="boll">BOLL</button>
+              <button class="btn btn-sm active" data-ma="5"    aria-pressed="true">MA5</button>
+              <button class="btn btn-sm active" data-ma="20"   aria-pressed="true">MA20</button>
+              <button class="btn btn-sm active" data-ma="60"   aria-pressed="true">MA60</button>
+              <button class="btn btn-sm"        data-ma="boll" aria-pressed="false">BOLL</button>
+              <button class="btn btn-sm"        data-ma="fib"  aria-pressed="false"
+                      title="斐波那契回撤：在区间最高/最低点之间标出 23.6% / 38.2% / 50% / 61.8% / 78.6% 支撑阻力位">FIB</button>
             </div>
             <div class="btn-group" id="subGroup">
               <button class="btn btn-sm active" data-sub="vol">成交量</button>

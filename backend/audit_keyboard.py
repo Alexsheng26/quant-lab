@@ -156,8 +156,55 @@ def main():
         check("连按 40 次 Tab 焦点从不落在隐形元素上", len(ghost) == 0, str(ghost[:5]))
         check("Tab 能走到的控件数量合理", len(seen) >= 15, f"走到 {len(seen)} 个")
 
-        # --- 5. 所有可交互控件都有无障碍名称 ---
-        print("\n[5] 可交互控件的无障碍名称")
+        # --- 5. 开关按钮的 aria-pressed 要和视觉状态一致 ---
+        print("\n[5] 叠加层开关的 aria-pressed")
+        pg.click('.tab[data-view="market"]')
+        pg.wait_for_timeout(400)
+
+        mismatch = pg.evaluate("""() => {
+            // .active 是视觉状态，aria-pressed 是读屏状态，两者必须同步，
+            // 否则屏幕阅读器用户不知道哪几条线是开着的
+            const bad = [];
+            document.querySelectorAll('#maGroup .btn').forEach(b => {
+                const on = b.classList.contains('active');
+                const pressed = b.getAttribute('aria-pressed');
+                if (pressed !== (on ? 'true' : 'false')) {
+                    bad.push(b.dataset.ma + ':active=' + on + ',pressed=' + pressed);
+                }
+            });
+            return bad;
+        }""")
+        check("初始状态两者一致", len(mismatch) == 0, str(mismatch))
+
+        for key in ("fib", "boll", "5"):
+            before = pg.eval_on_selector(
+                f'#maGroup .btn[data-ma="{key}"]', "e => e.getAttribute('aria-pressed')")
+            pg.click(f'#maGroup .btn[data-ma="{key}"]')
+            pg.wait_for_timeout(250)
+            after = pg.eval_on_selector(
+                f'#maGroup .btn[data-ma="{key}"]',
+                "e => e.getAttribute('aria-pressed') + '|' + e.classList.contains('active')")
+            # 注意别用 active 当变量名：它会遮蔽模块级的 active() 函数，
+            # 而 Python 的局部变量对整个函数体生效，前面的调用会一起挂掉
+            pressed, is_on = after.split("|")
+            check(f"{key} 点击后 aria-pressed 翻转",
+                  pressed != before and pressed == ("true" if is_on == "true" else "false"),
+                  f"{before} -> {pressed}, active={is_on}")
+            pg.click(f'#maGroup .btn[data-ma="{key}"]')     # 还原
+            pg.wait_for_timeout(200)
+
+        # 开着斐波那契时，画布的替代文本要把关键位读出来
+        pg.click('#maGroup .btn[data-ma="fib"]')
+        pg.wait_for_timeout(600)
+        label = pg.eval_on_selector("#mainChart", "e => e.getAttribute('aria-label')")
+        check("开启斐波那契后替代文本包含关键位",
+              "斐波那契" in label and "61.8%" in label,
+              label[:80] + "…")
+        pg.click('#maGroup .btn[data-ma="fib"]')
+        pg.wait_for_timeout(400)
+
+        # --- 6. 所有可交互控件都有无障碍名称 ---
+        print("\n[6] 可交互控件的无障碍名称")
         nameless = pg.evaluate("""() => {
             const bad = [];
             document.querySelectorAll('button,a[href],input,select').forEach(el => {

@@ -165,6 +165,102 @@
     });
   });
 
+  describe('indicators.fib', function () {
+    /** 造一段先跌到 lo 再涨到 hi（或反过来）的行情 */
+    function swing(lowFirst) {
+      const closes = lowFirst ? [100, 50, 60, 80, 200] : [200, 180, 120, 60, 100];
+      return closes.map(function (c, i) {
+        return { date: '2020-01-0' + (i + 1), open: c, high: c, low: c,
+                 close: c, volume: 1 };
+      });
+    }
+
+    it('上升段：0% 在最高价，100% 在最低价', function () {
+      const f = IND.fib(swing(true));
+      eq(f.trend, 'up');
+      eq(f.high, 200); eq(f.low, 50);
+      close(f.levels[0].price, 200, 1e-9, '0% 应该是高点');
+      close(f.levels[f.levels.length - 1].price, 50, 1e-9, '100% 应该是低点');
+    });
+
+    it('下降段：0% 在最低价，100% 在最高价', function () {
+      const f = IND.fib(swing(false));
+      eq(f.trend, 'down');
+      close(f.levels[0].price, 60, 1e-9, '0% 应该是低点');
+      close(f.levels[f.levels.length - 1].price, 200, 1e-9, '100% 应该是高点');
+    });
+
+    it('方向由哪个端点出现得更晚决定', function () {
+      eq(IND.fib(swing(true)).trend, 'up');
+      eq(IND.fib(swing(false)).trend, 'down');
+      // 同一组价格、不同出现顺序，回撤位必须镜像，不能一样
+      const a = IND.fib(swing(true)).levels[2].price;
+      const b = IND.fib(swing(false)).levels[2].price;
+      ok(a !== b, '方向反了回撤位却没变，说明没用上 trend');
+    });
+
+    it('61.8% 黄金分割位算得对', function () {
+      const f = IND.fib(swing(true));                 // 50 -> 200，区间 150
+      const g = f.levels.find(l => l.ratio === 0.618);
+      close(g.price, 200 - 150 * 0.618, 1e-9);
+      eq(g.key, true, '61.8% 应该被标成关键位');
+    });
+
+    it('所有回撤位都落在最高最低之间', function () {
+      [true, false].forEach(function (dir) {
+        const f = IND.fib(swing(dir));
+        f.levels.forEach(function (l) {
+          ok(l.price >= f.low - 1e-9 && l.price <= f.high + 1e-9,
+             l.label + ' 越界: ' + l.price);
+        });
+      });
+    });
+
+    it('默认给出 7 档，且比例单调递增', function () {
+      const f = IND.fib(swing(true));
+      eq(f.levels.length, 7);
+      for (let i = 1; i < f.levels.length; i++) {
+        ok(f.levels[i].ratio > f.levels[i - 1].ratio, '比例没有递增');
+      }
+    });
+
+    it('横盘无波动时返回 null 而不是一堆重叠的线', function () {
+      const flat = [1, 2, 3].map(function (i) {
+        return { date: '2020-01-0' + i, open: 100, high: 100, low: 100,
+                 close: 100, volume: 1 };
+      });
+      eq(IND.fib(flat), null);
+    });
+
+    it('数据不足时返回 null', function () {
+      eq(IND.fib([]), null);
+      eq(IND.fib(null), null);
+      eq(IND.fib(barsFromCloses([10])), null);
+    });
+
+    it('用影线的高低而不是收盘价', function () {
+      const bars = [
+        { date: '2020-01-01', open: 100, high: 100, low: 10,  close: 100, volume: 1 },
+        { date: '2020-01-02', open: 100, high: 300, low: 100, close: 100, volume: 1 },
+      ];
+      const f = IND.fib(bars);
+      eq(f.low, 10, '应该取最低影线');
+      eq(f.high, 300, '应该取最高影线');
+    });
+
+    it('端点日期指向正确的那根 K 线', function () {
+      const f = IND.fib(swing(true));
+      eq(f.lowDate, '2020-01-02');
+      eq(f.highDate, '2020-01-05');
+    });
+
+    it('可以自定义比例', function () {
+      const f = IND.fib(swing(true), [0, 0.5, 1]);
+      eq(f.levels.length, 3);
+      close(f.levels[1].price, 125, 1e-9);           // 50 和 200 的中点
+    });
+  });
+
   describe('indicators.resample', function () {
     it('日线聚合成周线：开取首、收取尾、高低取极值、量累加', function () {
       // 2020-01-06 是周一

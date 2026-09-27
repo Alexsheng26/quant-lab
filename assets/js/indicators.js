@@ -149,6 +149,61 @@ QL.ind = (function () {
       (i < period || values[i - period] === 0) ? null : (v / values[i - period] - 1) * 100);
   }
 
+  /* ---------------- 斐波那契回撤 ---------------- */
+
+  /**
+   * 回撤比例。
+   *
+   * 名字叫"斐波那契"是因为这些数来自斐波那契数列相邻项的比值：
+   * 数列越往后，前项除后项收敛到 0.618（黄金分割），隔一项是 0.382，
+   * 隔两项是 0.236，0.786 则是 0.618 的平方根。
+   * 0.5 严格说不属于这一族，是道氏理论的"腰部"，但所有交易软件都画，
+   * 这里跟随惯例一并给出。
+   */
+  const FIB_RATIOS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+
+  /**
+   * 斐波那契回撤位。
+   *
+   * 取区间内的最高价和最低价作为摆动端点，用**哪个端点出现得更晚**
+   * 判断这一段是上升还是下降——方向决定了 0% 画在哪一头：
+   *   上升段（低点在前）：0% 在最高价，100% 在最低价，中间是回调支撑位
+   *   下降段（高点在前）：0% 在最低价，100% 在最高价，中间是反弹阻力位
+   * 方向搞反的话，38.2% 和 61.8% 的位置会整个镜像，是常见的实现错误。
+   *
+   * @return null（数据不足或全程无波动）或 { high, low, range, trend, levels[] }
+   */
+  function fib(bars, ratios) {
+    if (!bars || bars.length < 2) return null;
+
+    let hi = -Infinity, lo = Infinity, hiIdx = -1, loIdx = -1;
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i];
+      if (b.high > hi) { hi = b.high; hiIdx = i; }
+      if (b.low  < lo) { lo = b.low;  loIdx = i; }
+    }
+    // 完全横盘时每条线会叠在一起，画出来没有意义
+    if (!isFinite(hi) || !isFinite(lo) || hi === lo) return null;
+
+    const range = hi - lo;
+    const up = hiIdx > loIdx;
+    const rs = ratios || FIB_RATIOS;
+
+    return {
+      high: hi, low: lo, range,
+      highIndex: hiIdx, lowIndex: loIdx,
+      highDate: bars[hiIdx].date, lowDate: bars[loIdx].date,
+      trend: up ? 'up' : 'down',
+      levels: rs.map(r => ({
+        ratio: r,
+        price: up ? hi - range * r : lo + range * r,
+        // 0.618 是黄金分割，回调到这里还不破位通常被视为趋势仍在
+        key: r === 0.618,
+        label: (Math.round(r * 1000) / 10) + '%'
+      }))
+    };
+  }
+
   /** 唐奇安通道：过去 period 根（不含当根）的最高/最低 */
   function donchian(bars, period) {
     const upper = new Array(bars.length).fill(null);
@@ -271,7 +326,7 @@ QL.ind = (function () {
   }
 
   return {
-    sma, ema, stdev, rsi, macd, boll, atr, roc, donchian,
+    sma, ema, stdev, rsi, macd, boll, atr, roc, donchian, fib, FIB_RATIOS,
     resample,
     returns, maxDrawdown, annualVol, sharpe, cagr
   };

@@ -299,12 +299,30 @@ QL.market = (function () {
     let hi = -Infinity, lo = Infinity;
     bars.forEach(b => { if (b.high > hi) hi = b.high; if (b.low < lo) lo = b.low; });
 
+    // 斐波那契的几条线是图上信息量最大的部分之一，开着的时候必须读出来，
+    // 否则视障用户只知道"图上多了点东西"
+    let fibText = '';
+    if (mas.fib) {
+      const f = IND.fib(bars);
+      fibText = f
+        ? '斐波那契回撤已开启，' +
+          (f.trend === 'up' ? '上升段（低点在前）' : '下降段（高点在前）') +
+          '，摆动区间 ' + U.fmtPrice(f.low) + '（' + f.lowDate + '）至 ' +
+          U.fmtPrice(f.high) + '（' + f.highDate + '）。关键位：' +
+          f.levels
+            .filter(l => l.ratio === 0.382 || l.ratio === 0.5 || l.ratio === 0.618)
+            .map(l => l.label + ' 在 ' + U.fmtPrice(l.price))
+            .join('，') + '。'
+        : '斐波那契回撤已开启，但区间内没有波动，无法计算。';
+    }
+
     cv.setAttribute('aria-label',
       (QL.state.symbol || '') + ' ' + INTERVAL_LABEL[interval] + 'K 线图，' +
       bars.length + ' 根，' + first.date + ' 至 ' + last.date + '。' +
       '区间' + (chg >= 0 ? '上涨' : '下跌') + Math.abs(chg).toFixed(1) + '%，' +
       '最新收盘 ' + U.fmtPrice(last.close) + '，' +
       '最高 ' + U.fmtPrice(hi) + '，最低 ' + U.fmtPrice(lo) + '。' +
+      fibText +
       '详细数值见下方「技术指标快照」表格。');
   }
 
@@ -333,10 +351,13 @@ QL.market = (function () {
     U.$$('#maGroup .btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const key = btn.dataset.ma;
-        const k = key === 'boll' ? 'boll' : parseInt(key, 10);
+        // boll 和 fib 是字符串键，均线是数字键
+        const k = /^\d+$/.test(key) ? parseInt(key, 10) : key;
         mas[k] = !mas[k];
         btn.classList.toggle('active', !!mas[k]);
+        btn.setAttribute('aria-pressed', mas[k] ? 'true' : 'false');
         chart.setMA(mas);
+        if (k === 'fib') describeChart(activeBars());    // 替代文本要跟着更新
       });
     });
 
