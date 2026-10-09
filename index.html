@@ -259,6 +259,19 @@
         <button id="btnRunPanorama" class="btn btn-primary btn-sm">运行全景分析</button>
       </div>
 
+      <!-- ⓪ 综合简报 —— 把下面三个 Agent 的结论串成一段话。
+           刻意放在最前面：它是对三者的概括，读者应该先看结论再看明细。
+           数字全部来自三个 Agent 已经算好的输出，模型只负责串联与指出矛盾。 -->
+      <div class="panel" id="briefPanel">
+        <div class="panel-head">
+          <span class="panel-title">综合简报</span>
+          <span id="briefMeta" class="muted"></span>
+        </div>
+        <div id="briefBody" class="brief-body" aria-live="polite">
+          <span class="muted">运行全景分析后生成</span>
+        </div>
+      </div>
+
       <!-- ① 量化分析 Agent -->
       <div class="panel">
         <div class="panel-head">
@@ -309,6 +322,26 @@
           </div>
           <div id="financialSummary" class="fin-summary"></div>
           <div id="filingList" class="filing-list" tabindex="0" role="region" aria-label="SEC 申报列表，可滚动"><div class="muted pad">未加载</div></div>
+        </div>
+      </div>
+
+      <!-- ④ 风险因素逐年变化 —— 研究 Agent 真正"读正文"的那一半。
+           XBRL 解决了数字，这里解决文字：10-K 的 Item 1A 每年重写，
+           新增一条往往比财务数字更早反映问题。
+           机械比对在后端用 difflib 做完，模型只解读变化的段落。 -->
+      <div class="panel" id="riskPanel">
+        <div class="panel-head">
+          <span class="panel-title">④ 风险因素逐年变化（10-K Item 1A）</span>
+          <div class="toolbar">
+            <span id="riskMeta" class="muted"></span>
+            <button id="btnRiskDiff" class="btn btn-sm">对比最近两份年报</button>
+          </div>
+        </div>
+        <div id="riskBody" class="risk-body" aria-live="polite">
+          <div class="muted pad">
+            点击右上角按钮，抓取最近两份 10-K 的「风险因素」章节做逐年比对。
+            正文有几十页，首次抓取需要十几秒。
+          </div>
         </div>
       </div>
 

@@ -5,6 +5,8 @@
  *   ② 新闻 Agent      /api/news       资讯扫描 + 情绪 + 来源分布 + 检索问答
  *   ③ 研究 Agent      /api/filings    SEC 申报列表
  *                     /api/financials XBRL 结构化财务
+ *                     /api/filings/risk-changes  10-K 风险因素逐年变化
+ *   ⓪ 综合简报        /api/panorama/brief        把上面三者的结论串成一段话
  *
  * 三个都依赖后端（要访问 Yahoo / SEC），MOCK 模式下没法工作，
  * 这时直接把话说清楚，而不是转个圈然后空白。
@@ -387,6 +389,152 @@ QL.agents = (function () {
     return U.fmtDate(d);
   }
 
+  /* ---------------- ⓪ 综合简报 ---------------- */
+
+  /**
+   * 把三个 Agent 的结论合成一段话。
+   *
+   * 要点：这一步**不传任何数据上行**。后端自己从三个 Agent 的缓存里取
+   * 已经算好的结论——如果让前端把结论 POST 上去，等于谁都能往 prompt 里
+   * 塞任意文本。
+   */
+  async function loadBrief(symbol) {
+    const body = $('#briefBody');
+    const meta = $('#briefMeta');
+    body.innerHTML = '<span class="muted">正在综合三个 Agent 的结论…</span>';
+    meta.textContent = '';
+
+    let res;
+    try {
+      res = await api('/api/panorama/brief', { symbol });
+    } catch (e) {
+      body.innerHTML = '<span class="muted">请求失败：' + esc(e.message) + '</span>';
+      return;
+    }
+
+    if (!res.ok) {
+      // 没配 Key 是常态而不是错误，说清楚怎么开启就行
+      body.innerHTML = '<span class="muted">暂不可用：' + esc(res.reason || '未知原因') +
+        '</span><div class="brief-hint muted">配置 DEEPSEEK_API_KEY 或 ANTHROPIC_API_KEY 后，' +
+        '这里会把三个 Agent 的结论综合成一段话。</div>';
+      return;
+    }
+
+    let html = '<p class="brief-text">' + esc(res.brief || '') + '</p>';
+
+    // 矛盾点是这段简报最有价值的部分：三个 Agent 看法不一致的地方
+    if (res.conflicts && res.conflicts.length) {
+      html += '<div class="brief-conflicts"><b>三方分歧</b><ul>' +
+        res.conflicts.map(c => '<li>' + esc(c) + '</li>').join('') +
+        '</ul></div>';
+    }
+    if (res.caveat) {
+      html += '<p class="brief-caveat muted">未覆盖：' + esc(res.caveat) + '</p>';
+    }
+    body.innerHTML = html;
+
+    const src = (res.sources || []).join(' + ');
+    meta.textContent = (res.provider ? res.provider + ' · ' : '') +
+                       (src ? '综合自 ' + src : '');
+  }
+
+  /* ---------------- ④ 风险因素逐年变化 ---------------- */
+
+  const SEVERITY = {
+    high:   { label: '高', cls: 'sev-high' },
+    medium: { label: '中', cls: 'sev-mid' },
+    low:    { label: '低', cls: 'sev-low' }
+  };
+
+  async function loadRiskDiff() {
+    const symbol = QL.state.symbol;
+    if (!symbol) return;
+    if (needBackend()) return;
+
+    const body = $('#riskBody');
+    const meta = $('#riskMeta');
+    const btn = $('#btnRiskDiff');
+
+    btn.disabled = true;
+    body.innerHTML = '<div class="pad muted">正在抓取两份 10-K 正文并比对…' +
+                     '每份几十页，首次需要十几秒。</div>';
+    meta.textContent = '';
+
+    let res;
+    try {
+      res = await api('/api/filings/risk-changes', { symbol });
+    } catch (e) {
+      body.innerHTML = '<div class="pad muted">请求失败：' + esc(e.message) + '</div>';
+      return;
+    } finally {
+      btn.disabled = false;
+    }
+
+    if (!res.ok || !res.found) {
+      body.innerHTML = '<div class="pad muted">' +
+        esc(res.reason || '无法完成比对') + '</div>';
+      return;
+    }
+
+    meta.textContent = res.oldFiling.year + ' → ' + res.newFiling.year +
+      ' · 新增 ' + res.addedCount + ' 段 · 删除 ' + res.removedCount + ' 段' +
+      (res.provider ? ' · ' + res.provider : '');
+
+    let html = '';
+
+    if (res.takeaway) {
+      html += '<p class="risk-takeaway">' + esc(res.takeaway) + '</p>';
+    }
+
+    if (res.newRisks && res.newRisks.length) {
+      html += '<div class="risk-group"><b>新增风险</b>' +
+        res.newRisks.map(r => {
+          const sev = SEVERITY[r.severity] || SEVERITY.low;
+          return '<div class="risk-item">' +
+            '<div class="risk-head"><span class="sev ' + sev.cls + '">' + sev.label + '</span>' +
+            '<span class="risk-title">' + esc(r.title) + '</span></div>' +
+            '<div class="risk-detail">' + esc(r.detail) + '</div>' +
+            // 原文摘录是这条结论的凭据，必须显示出来供核验
+            (r.quote ? '<blockquote class="risk-quote">' + esc(r.quote) + '</blockquote>' : '') +
+            '</div>';
+        }).join('') + '</div>';
+    }
+
+    if (res.droppedRisks && res.droppedRisks.length) {
+      html += '<div class="risk-group"><b>不再提及</b>' +
+        res.droppedRisks.map(r =>
+          '<div class="risk-item"><div class="risk-title">' + esc(r.title) + '</div>' +
+          '<div class="risk-detail">' + esc(r.detail) + '</div></div>').join('') +
+        '</div>';
+    }
+
+    // 没有 LLM 解读时，把 diff 出来的原文段落直接摆出来——
+    // 少了解读，但"哪些段落是新的"这个事实仍然有用
+    if (!res.newRisks && res.added && res.added.length) {
+      html += '<div class="risk-group"><b>新增段落原文</b>' +
+        res.added.slice(0, 8).map(p =>
+          '<blockquote class="risk-quote">' + esc(p.slice(0, 400)) +
+          (p.length > 400 ? '…' : '') + '</blockquote>').join('') + '</div>';
+    }
+
+    if (res.llmError) {
+      html += '<p class="muted risk-note">仅文本比对（未生成解读）：' +
+              esc(res.llmError) + '</p>';
+    }
+
+    if (!html) {
+      html = '<div class="pad muted">两份年报的风险因素没有实质变化。</div>';
+    }
+
+    html += '<p class="risk-links muted">原文：' +
+      '<a href="' + esc(res.newFiling.url) + '" target="_blank" rel="noopener">' +
+      esc(res.newFiling.year) + ' 年 ' + esc(res.newFiling.form) + '</a> · ' +
+      '<a href="' + esc(res.oldFiling.url) + '" target="_blank" rel="noopener">' +
+      esc(res.oldFiling.year) + ' 年 ' + esc(res.oldFiling.form) + '</a></p>';
+
+    body.innerHTML = html;
+  }
+
   /* ---------------- 编排 ---------------- */
 
   async function run() {
@@ -402,6 +550,10 @@ QL.agents = (function () {
       loadNews(symbol),
       loadResearch(symbol)
     ]);
+
+    // 简报要等三个 Agent 跑完：后端从它们的缓存里取结论，
+    // 提前调用的话缓存是空的，会白白重算一遍（还可能拿不到数据）
+    if (QL.state.symbol === symbol) await loadBrief(symbol);
   }
 
   function reset() {
@@ -418,11 +570,17 @@ QL.agents = (function () {
     $('#filingList').innerHTML = '<div class="pad muted">未加载</div>';
     $('#financialSummary').innerHTML = '';
     $('#filingCompany').textContent = '';
+    $('#briefBody').innerHTML = '<span class="muted">运行全景分析后生成</span>';
+    $('#briefMeta').textContent = '';
+    $('#riskBody').innerHTML = '<div class="muted pad">点击右上角按钮，' +
+      '抓取最近两份 10-K 的「风险因素」章节做逐年比对。</div>';
+    $('#riskMeta').textContent = '';
   }
 
   function init() {
     radar = new QL.chart.RadarChart($('#radarChart'));
     $('#btnRunPanorama').addEventListener('click', run);
+    $('#btnRiskDiff').addEventListener('click', loadRiskDiff);
     $('#btnAskNews').addEventListener('click', askNews);
     $('#newsQuestion').addEventListener('keydown', e => {
       if (e.key === 'Enter') askNews();

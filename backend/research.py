@@ -39,15 +39,35 @@ _last_call = [0.0]
 _rate_lock = threading.Lock()
 
 
-def _get(url: str, timeout: int = 30) -> Any:
+def _throttle() -> None:
     with _rate_lock:
         wait = _MIN_INTERVAL - (time.time() - _last_call[0])
         if wait > 0:
             time.sleep(wait)
         _last_call[0] = time.time()
+
+
+def _get(url: str, timeout: int = 30) -> Any:
+    _throttle()
     resp = requests.get(url, headers=SEC_UA, timeout=timeout)
     resp.raise_for_status()
     return resp.json()
+
+
+def _get_text(url: str, timeout: int = 60) -> str:
+    """取申报文件正文（HTML）。
+
+    和 _get 共用同一套限流与 User-Agent —— SEC 按 UA 和频率封禁，
+    绕过这里直接 requests.get 迟早会被限流。
+    10-K 正文可以到几 MB，所以超时放宽。
+    """
+    _throttle()
+    resp = requests.get(url, headers=SEC_UA, timeout=timeout)
+    resp.raise_for_status()
+    # SEC 的老文件有时没声明编码，requests 会猜成 ISO-8859-1
+    if not resp.encoding or resp.encoding.lower() == "iso-8859-1":
+        resp.encoding = resp.apparent_encoding or "utf-8"
+    return resp.text
 
 
 # ----------------------------------------------------------------------
@@ -102,6 +122,64 @@ FORM_MEANING = {
 }
 
 KEY_FORMS = {"10-K", "10-Q", "8-K", "20-F", "6-K", "DEF 14A", "S-1"}
+
+
+ANNUAL_FORMS = ("10-K", "20-F")
+
+
+def annual_reports(symbol: str, count: int = 2) -> Dict[str, Any]:
+    """最近 N 份年报。
+
+    不能从 filings() 的结果里筛：那个函数为了控制响应体积，关键申报
+    最多只留 limit 条。摩根大通这种申报量极大的公司，前 40 条关键申报
+    里 8-K 就占满了，只剩 1 份 10-K，逐年对比直接做不了。
+    这里扫完整的 recent 列表，只挑年报。
+    """
+    meta = cik_for(symbol)
+    if not meta:
+        return {"found": False,
+                "reason": f"{symbol} 不在 SEC 登记名录中（ETF、ADR 或非美国注册主体可能没有）"}
+
+    data = _get(SUBMISSIONS_URL.format(cik=meta["cik"]))
+    cik_int = int(meta["cik"])
+
+    def harvest(block: Dict[str, Any], acc_out: List[Dict[str, Any]]) -> None:
+        n = len(block.get("form", []))
+        for i in range(n):
+            if block["form"][i] not in ANNUAL_FORMS:
+                continue
+            doc = block.get("primaryDocument", [""] * n)[i]
+            if not doc:
+                continue
+            acc = block["accessionNumber"][i].replace("-", "")
+            acc_out.append({
+                "form": block["form"][i],
+                "filingDate": block["filingDate"][i],
+                "reportDate": block.get("reportDate", [""] * n)[i],
+                "url": (f"https://www.sec.gov/Archives/edgar/data/"
+                        f"{cik_int}/{acc}/{doc}"),
+            })
+            if len(acc_out) >= count:
+                return
+
+    out: List[Dict[str, Any]] = []
+    harvest(data.get("filings", {}).get("recent", {}), out)
+
+    # recent 最多只装约 1000 条。摩根大通这种一年就能填满的公司，
+    # recent 里可能只有 1 份年报，更早的在 filings.files 分批文件里。
+    # 不翻页的话这些公司永远做不了逐年对比。
+    if len(out) < count:
+        for f in data.get("filings", {}).get("files", []):
+            try:
+                older = _get(f"https://data.sec.gov/submissions/{f['name']}")
+            except Exception:                         # noqa: BLE001
+                break                                 # 取不到就用已有的，不要整个失败
+            harvest(older, out)
+            if len(out) >= count:
+                break
+
+    return {"found": True, "companyName": data.get("name") or meta["title"],
+            "reports": out}
 
 
 def filings(symbol: str, limit: int = 25) -> Dict[str, Any]:

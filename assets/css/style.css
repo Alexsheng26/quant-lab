@@ -967,3 +967,74 @@ select { font-family: var(--sans); min-width: 140px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #2c3648; }
+
+/* ---------------- 综合简报 / 风险因素变化 ---------------- */
+
+.brief-body { padding: 14px 16px; }
+.brief-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text);
+}
+.brief-conflicts {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--warn);
+  background: rgba(240,167,66,.06);
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+}
+.brief-conflicts b { color: var(--warn); }
+.brief-conflicts ul { margin: 6px 0 0; padding-left: 20px; }
+.brief-conflicts li { margin: 4px 0; line-height: 1.6; }
+.brief-caveat, .brief-hint { margin: 10px 0 0; font-size: 12px; line-height: 1.6; }
+
+.risk-body { padding: 14px 16px; }
+.risk-takeaway {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: var(--bg-elev);
+  border-radius: 6px;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.risk-group { margin-bottom: 16px; }
+.risk-group > b { display: block; margin-bottom: 8px; font-size: 13px; }
+.risk-item {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.risk-item:last-child { border-bottom: none; }
+.risk-head { display: flex; align-items: center; gap: 8px; }
+.risk-title { font-size: 13.5px; font-weight: 500; }
+.risk-detail { margin-top: 4px; font-size: 12.5px; line-height: 1.65; color: var(--text-dim); }
+
+/* 严重度用色块 + 文字双重编码：只靠颜色区分的话，
+   色觉障碍用户完全读不出来（WCAG 1.4.1 不能仅用颜色传达信息） */
+.sev {
+  flex: none;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--on-accent);
+}
+.sev-high { background: var(--down); }
+.sev-mid  { background: var(--warn); }
+.sev-low  { background: var(--text-faint); }
+
+/* 原文摘录是结论的凭据，排版上要能一眼认出"这是原文不是转述" */
+.risk-quote {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-left: 2px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+.risk-links, .risk-note { margin: 10px 0 0; font-size: 12px; }
+.risk-links a { color: var(--accent); }

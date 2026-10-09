@@ -65,3 +65,17 @@ def _no_network(monkeypatch, request):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "network: 需要访问真实外网的测试")
+
+
+@pytest.fixture(autouse=True)
+def _no_real_api_keys(monkeypatch, request):
+    """测试一律在"没有任何真实 Key"的环境下跑。
+
+    开发机上通常设着 DEEPSEEK_API_KEY / ANTHROPIC_API_KEY。
+    如果不清掉，llm.available() 会返回 True，测试就可能真的去打付费接口——
+    既花钱又让结果依赖外部服务。需要模拟有 Key 的测试自己 monkeypatch.setenv。
+    """
+    if request.node.get_closest_marker("network"):
+        return
+    for name in ("DEEPSEEK_API_KEY", "ANTHROPIC_API_KEY", "LLM_PROVIDER"):
+        monkeypatch.delenv(name, raising=False)

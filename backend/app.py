@@ -431,6 +431,7 @@ def quote(symbol: str) -> Dict[str, Any]:
 #   2) 失败返回结构化的 ok=false + reason，而不是抛 500 让前端整块空白
 # ----------------------------------------------------------------------
 import news as news_agent            # noqa: E402
+import filing_text                   # noqa: E402
 import research as research_agent    # noqa: E402
 import fundamentals as quant_agent   # noqa: E402
 
@@ -447,7 +448,10 @@ def _cached(key: str, ttl: float, producer):
         return hit
     try:
         val = producer()
-        val["ok"] = True
+        # setdefault 而不是直接赋值：producer 可能已经明确给了 ok=False
+        # （比如"没配 Key"、"数据不足以合成简报"）。直接覆盖会把一个
+        # 刻意的失败标成成功，前端就走进了成功分支却拿不到字段。
+        val.setdefault("ok", True)
     except Exception as exc:                          # noqa: BLE001
         val = {"ok": False, "reason": f"{type(exc).__name__}: {exc}"}
     cache.set(key, val)
@@ -502,6 +506,115 @@ def api_quant(symbol: str) -> Dict[str, Any]:
     sym = symbol.strip().upper()
     return _cached(f"quant:{sym}", QUANT_TTL,
                    lambda: quant_agent.evaluate(sym))
+
+
+@app.get("/api/filings/risk-changes")
+def api_risk_changes(request: Request, symbol: str) -> Dict[str, Any]:
+    """10-K 风险因素的逐年变化。
+
+    机械 diff 在本地算（确定性、不花钱），只有解读那一步走 LLM，
+    所以超限时仍然返回完整的 diff —— 少了解读，但原文段落都在。
+    """
+    sym = symbol.strip().upper()
+    key = f"riskdiff:{sym}"
+
+    hit = cache.get(key, FILINGS_TTL)
+    if hit is not None:
+        return hit
+
+    client_ip = request.client.host if request.client else "unknown"
+    use_llm = _llm_rate_ok(client_ip)
+
+    res = _cached(key, FILINGS_TTL,
+                  lambda: filing_text.risk_changes(sym, use_llm=use_llm))
+    if not use_llm and res.get("ok"):
+        res["llmError"] = (f"已达每小时 {LLM_CALLS_PER_HOUR} 次生成式调用上限，"
+                           f"本次只返回文本比对结果")
+    return res
+
+
+@app.get("/api/panorama/brief")
+def api_panorama_brief(request: Request, symbol: str) -> Dict[str, Any]:
+    """把三个 Agent 已经算好的结论合成一段简报。
+
+    刻意在服务端取数而不是让前端把结论传上来：传上来的话，
+    任何人都能往 prompt 里塞任意文本。这里读的全是自己的缓存，
+    而且三个 Agent 在全景页刚跑过，基本都是缓存命中，不会变慢。
+    """
+    sym = symbol.strip().upper()
+    key = f"brief:{sym}"
+
+    hit = cache.get(key, QUANT_TTL)
+    if hit is not None:
+        return hit
+
+    client_ip = request.client.host if request.client else "unknown"
+    if not _llm_rate_ok(client_ip):
+        return {"ok": False,
+                "reason": f"已达每小时 {LLM_CALLS_PER_HOUR} 次生成式调用上限"}
+
+    def build() -> Dict[str, Any]:
+        quant = _cached(f"quant:{sym}", QUANT_TTL, lambda: quant_agent.evaluate(sym))
+        news = _cached(f"news:{sym}:20", NEWS_TTL, lambda: news_agent.fetch(sym, 20))
+        facts = _cached(f"facts:{sym}", FACTS_TTL,
+                        lambda: research_agent.financials(sym))
+
+        # 只挑"已经算好的结论"喂给模型，不给原始行情数据。
+        # 模型在这里的职责是复述和串联，不是分析。
+        payload: Dict[str, Any] = {}
+
+        if quant.get("ok") and quant.get("axes"):
+            payload["量化分位"] = {
+                "总分": quant.get("total"),
+                "结论": (quant.get("verdict") or {}).get("tag"),
+                "结论说明": (quant.get("verdict") or {}).get("text"),
+                "行业": quant.get("sector"),
+                "参照池只数": quant.get("universeSize"),
+                "同行业只数": quant.get("peerCount"),
+                "各维度全市场分位": {a["label"]: a["marketPct"] for a in quant["axes"]},
+                "缺失维度": (quant.get("coverage") or {}).get("missing", []),
+            }
+
+        if news.get("ok") and news.get("items"):
+            overall = news.get("overall") or {}
+            payload["新闻扫描"] = {
+                "条数": news.get("count"),
+                "整体情绪": overall.get("label"),
+                "正面条数": overall.get("positive"),
+                "负面条数": overall.get("negative"),
+                "中性条数": overall.get("neutral"),
+                "标题": [i.get("title") for i in news["items"][:10]],
+                # 来源集中度也是结论的一部分：全来自一家媒体时要让模型说出来
+                "来源分布": {x["name"]: x["count"] for x in news.get("sources", [])},
+            }
+
+        if facts.get("ok") and facts.get("derived"):
+            der = facts["derived"]
+            rev = (facts.get("series", {}).get("revenue") or {}).get("rows", [])
+            payload["财报研究"] = {
+                "公司": facts.get("companyName"),
+                "净利率": der.get("netMargin"),
+                "营收同比": der.get("revenueYoY"),
+                "净利同比": der.get("netIncomeYoY"),
+                "ROE": der.get("roe"),
+                "最近财年": rev[-1]["year"] if rev else None,
+                "来源": "SEC EDGAR XBRL",
+            }
+
+        if len(payload) < 2:
+            return {"ok": False,
+                    "reason": "三个 Agent 里至少要有两个有数据才值得合成简报",
+                    "available": list(payload)}
+
+        import llm
+        if not llm.available():
+            return {"ok": False, "reason": llm.status().get("reason")}
+
+        out = llm.panorama_brief(sym, payload)
+        out["sources"] = list(payload)
+        return out
+
+    return _cached(key, QUANT_TTL, build)
 
 
 @app.get("/api/llm/status")
