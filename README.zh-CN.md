@@ -89,9 +89,12 @@ python -m venv .venv
 .venv/bin/python backend/app.py     # 起后端，监听 127.0.0.1:8000
 ```
 
-然后用浏览器打开 `index.html`，或直接用[在线 Demo](https://alexsheng26.github.io/quant-lab/)
-——页面启动时会自动探测本机 8000 端口，探到就用真实数据。
-（浏览器把 `localhost` 当可信来源，所以 HTTPS 页面也能连本机 HTTP 后端。Safari 除外。）
+然后用浏览器打开 `index.html`——页面启动时会自动探测本机 8000 端口，探到就用真实数据。
+
+[在线 Demo](https://alexsheng26.github.io/quant-lab/) 也能连本机后端，但新版 Chrome / Edge
+会先询问「是否允许这个网站访问本地网络上的设备」。点**允许**才连得上（允许后如果还是模拟数据，
+刷新一次）；不允许就会被拦截。直接打开本地的 `index.html`（也就是 `quantlab.bat` 的做法）
+不需要这一步。Safari 则完全不允许 HTTPS 页面连本机 HTTP 后端。
 
 ### 文件对照
 
@@ -204,8 +207,10 @@ Windows 下也可以直接双击 `run-backend.bat`。后端起在 `http://127.0.
 页面会问后端地址——本机跑了后端就填 `http://127.0.0.1:8000`。
 
 > **混合内容策略**：HTTPS 页面请求 `http://` 接口通常会被浏览器拦截，
-> 但 `localhost` / `127.0.0.1` 是例外——Chrome 和 Firefox 视其为可信来源放行，
-> **Safari 不放行**。Safari 用户需要本地起个 HTTPS 后端，或直接克隆仓库本地打开。
+> 但 `localhost` / `127.0.0.1` 是例外，Chrome 视其为可信来源。
+> 不过新版 Chrome / Edge（实测 155）又加了一道「本地网络访问」权限：公网网页访问本机地址前
+> 必须由用户点允许，否则请求直接被拒——没授权时在线 Demo 会停在模拟数据。
+> **Safari 不放行**。最省事的做法始终是克隆仓库后用 `quantlab.bat` 打开本地页面。
 
 ### 发布到 GitHub Pages
 

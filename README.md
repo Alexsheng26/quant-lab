@@ -119,10 +119,14 @@ Elsewhere, or to watch the backend log:
 .venv/bin/python backend/app.py          # serves on 127.0.0.1:8000 (Windows: .venv\Scripts\python)
 ```
 
-…then open `index.html`, or use the [live demo](https://alexsheng26.github.io/quant-lab/):
-on load the page probes `127.0.0.1:8000` and switches to live data if the backend answers.
-(Chrome and Firefox treat `localhost` as a trustworthy origin, so an HTTPS page may call a local
-HTTP backend. Safari does not.)
+…then open `index.html`. On load the page probes `127.0.0.1:8000` and switches to live data
+if the backend answers.
+
+The [live demo](https://alexsheng26.github.io/quant-lab/) can use your local backend too, but
+recent Chrome and Edge first ask for permission before a public website may reach your local
+network. Allow it (and reload if the page is still on simulated data); otherwise the request is
+blocked. Opening the local `index.html` — which is what `quantlab.bat` does — needs no permission.
+Safari blocks HTTPS pages from calling a local HTTP backend altogether.
 
 > After pulling changes, hard-refresh with **Ctrl+F5**. Static servers here send no
 > `Cache-Control`, so browsers happily keep running yesterday's JavaScript.
