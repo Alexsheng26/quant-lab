@@ -210,6 +210,23 @@ def _recent_10k(symbol: str, count: int = 2) -> Tuple[List[Dict[str, Any]], Opti
 # 正文动辄几 MB，截断一下保护内存和后续处理；风险因素章节通常在前半部分
 _MAX_DOC_CHARS = 4_000_000
 
+# 新增段落占比超过这个值，就把结果标为"不可信"，并跳过模型解读。
+#
+# 取值依据是 8 家公司的实测（新年报里被判为新增的段落占比）：
+#
+#   KO 1.1%  NIO 9.1%  AAPL 9.5%  NVDA 11.9%  TSLA 15.2%  MSFT 19.6%   ← 正常
+#   JPM 43.8%                                                         ← 大幅改写
+#   BABA 97.2%                                                        ← 章节定位偏了
+#
+# 正常公司最高 19.6%，0.3 留了约 10 个点余量。
+#
+# JPM 这一档值得单独说：它不是程序出错。它把"声誉风险"这类老内容改写成了
+# "引导句 + 项目符号"，文字全是新的，概念却是旧的。n-gram 覆盖率衡量的是
+# 文字新旧而不是概念新旧，所以公司改写得越狠，这里的"新增"就越不可信。
+# 一开始阈值设在 0.6，只拦得住 BABA，JPM 这种半真半假的结果会被当成
+# 正常结论端给用户——那比直接说"不确定"更糟。
+_SUSPECT_RATIO = 0.3
+
 # 送进模型的段落数上限。真实案例里一年新增 5~15 条是常态，
 # 超过 40 条基本说明章节被整体重写了，再多送也没有边际价值
 _MAX_SEND = 40
@@ -245,17 +262,13 @@ def risk_changes(symbol: str, use_llm: bool = True) -> Dict[str, Any]:
     new, old = sections[0], sections[1]
     d = diff_sections(old["paras"], new["paras"])
 
-    # 可信度自检。
+    # 可信度自检，阈值见 _SUSPECT_RATIO。
     #
-    # SEC 文件的排版没有统一标准，总有公司的章节定位会偏——实测 8 家里
-    # 有 2 家（一家 20-F、一家申报量极大的银行）抽出来的章节明显不对，
-    # 表现就是"绝大多数段落都是新增"。真实的逐年变化通常在 1%~25%。
-    #
-    # 这种时候宁可承认不确定，也不能把噪声当洞察端给用户：
-    # 一份"97% 的风险是新增的"报告既没用，又会让人不再信任这个功能。
-    # 同时也跳过模型调用——拿错的输入去生成解读纯属浪费钱。
+    # 新增占比过高时，文本比对已经没法可靠回答"哪些风险是新的"，
+    # 宁可承认不确定，也不能把噪声当洞察端给用户。同时跳过模型调用——
+    # 拿不可靠的输入去生成解读，结论看着像真的，反而更误导，还浪费钱。
     ratio = len(d["added"]) / max(1, len(new["paras"]))
-    suspect = ratio > 0.6
+    suspect = ratio > _SUSPECT_RATIO
 
     new_year = (new["doc"].get("reportDate") or new["doc"]["filingDate"])[:4]
     old_year = (old["doc"].get("reportDate") or old["doc"]["filingDate"])[:4]
@@ -280,9 +293,11 @@ def risk_changes(symbol: str, use_llm: bool = True) -> Dict[str, Any]:
     }
     if suspect:
         result["reason"] = (
-            f"这份申报里 {ratio:.0%} 的段落都被判为新增，远高于正常的逐年变化幅度，"
-            f"多半是章节定位不准（SEC 文件排版没有统一标准）。"
-            f"下面的比对结果仅供参考，建议直接点开原文核对。")
+            f"{ratio:.0%} 的段落被判为新增，明显高于正常的逐年变化幅度"
+            f"（实测多数公司在 20% 以内）。可能是公司今年大幅改写了措辞——"
+            f"文本比对只能看出文字是新的，看不出风险本身是不是新的；"
+            f"也可能是这份文件的章节没有定位准。"
+            f"因此没有生成解读，下面的比对结果仅供参考，建议直接点开原文核对。")
 
     if suspect or not use_llm or not (d["added"] or d["removed"]):
         return result

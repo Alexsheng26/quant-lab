@@ -281,13 +281,17 @@ def test_risk_changes_returns_diff_without_llm(monkeypatch):
 
 def test_risk_changes_surfaces_llm_failure(monkeypatch):
     _two_filings(monkeypatch)
+    # 真实年报大部分段落逐年不变，只有少数新增。夹具要像这样，
+    # 否则新增占比过高会被可信度守卫拦下，走不到调用模型那一步。
+    shared = [P_SUPPLY] + [_unique_para(3000 + k) for k in range(8)]
     pages = {
-        "https://example.com/new.htm": _doc_html([P_SUPPLY, P_AI_REG]),
-        "https://example.com/old.htm": _doc_html([P_SUPPLY]),
+        "https://example.com/new.htm": _doc_html(shared + [P_AI_REG]),
+        "https://example.com/old.htm": _doc_html(shared),
     }
     monkeypatch.setattr(ft.research, "_get_text", lambda url, timeout=60: pages[url])
 
     out = ft.risk_changes("NVDA", use_llm=True)     # 测试环境没有 Key
+    assert out["lowConfidence"] is False
     assert out["found"] is True and out["mode"] == "diff"
     assert out.get("llmError"), "LLM 不可用时要把原因带出来，而不是静默"
 
@@ -353,8 +357,10 @@ def test_implausible_diff_is_flagged_not_presented(monkeypatch):
 def test_normal_diff_is_not_flagged(monkeypatch):
     """反向验证：正常幅度的变化不能被误标成不可信。"""
     _two_filings(monkeypatch)
-    base = [f"Shared risk paragraph {i} describing an ongoing concern that "
-            f"persists across both fiscal years with ample length." for i in range(10)]
+    # 共享段落必须长于 paragraphs() 的 120 字符门槛。最初这里每段只有
+    # 约 112 个字符，全被静默过滤掉，实际只剩"1 新 1 旧"——比例 50%。
+    # 阈值是 0.6 时恰好没暴露，调到 0.3 才露出来。
+    base = [_unique_para(2000 + k) for k in range(10)]
     pages = {"https://example.com/new.htm": _doc_html(base + [P_AI_REG]),
              "https://example.com/old.htm": _doc_html(base)}
     monkeypatch.setattr(ft.research, "_get_text", lambda url, timeout=60: pages[url])
@@ -362,4 +368,65 @@ def test_normal_diff_is_not_flagged(monkeypatch):
     out = ft.risk_changes("NVDA", use_llm=False)
     assert out["lowConfidence"] is False
     assert out["addedCount"] == 1
+
+# ----------------------------------------------------------------------
+# 可信度阈值
+# ----------------------------------------------------------------------
+
+def _word(n):
+    """确定性地生成一个纯字母"词"。
+
+    不能用数字区分：_normalize 会把数字全抹成 #，"risk1" 和 "risk2"
+    归一化后是同一个词，覆盖率会被虚高。
+    """
+    out, n = "", n + 1000
+    while n:
+        out += chr(97 + n % 26)
+        n //= 26
+    return out
+
+
+def _unique_para(i):
+    """词汇和其他任何段落都不重叠的段落。"""
+    return " ".join(_word(i * 100 + j) for j in range(30)) + "."
+
+
+@pytest.mark.parametrize("new_count,flagged", [
+    (2, False),    # 2 / 10 = 20%，相当于 MSFT 的 19.6%
+    (4, True),     # 4 / 12 = 33%，越过 0.3
+])
+def test_threshold_boundary(monkeypatch, new_count, flagged):
+    _two_filings(monkeypatch)
+    base = [_unique_para(1000 + k) for k in range(8)]
+    fresh = [_unique_para(k) for k in range(new_count)]
+    pages = {"https://example.com/new.htm": _doc_html(base + fresh),
+             "https://example.com/old.htm": _doc_html(base)}
+    monkeypatch.setattr(ft.research, "_get_text", lambda url, timeout=60: pages[url])
+
+    out = ft.risk_changes("NVDA", use_llm=False)
+    assert out["addedCount"] == new_count
+    assert out["lowConfidence"] is flagged
+
+
+def test_threshold_sits_between_measured_normal_and_rewrite():
+    """阈值的依据是实测数据，钉在这里防止以后被随手改掉。
+
+    6 家正常公司的新增占比最高是 MSFT 的 19.6%；JPM 大幅改写措辞后是 43.8%。
+    阈值必须落在两者之间：太低会把正常结果误标成不可信，太高（比如最初的 0.6）
+    会让 JPM 这种文字新、概念旧的结果被当成正常结论端出去。
+    """
+    assert 0.196 < ft._SUSPECT_RATIO < 0.438
+
+
+def test_flag_reason_names_both_causes(monkeypatch):
+    """提示语要把两种原因都说出来——大幅改写和章节定位不准是不同的问题。"""
+    _two_filings(monkeypatch)
+    pages = {"https://example.com/new.htm": _doc_html([_unique_para(k) for k in range(10)]),
+             "https://example.com/old.htm": _doc_html([_unique_para(500 + k) for k in range(10)])}
+    monkeypatch.setattr(ft.research, "_get_text", lambda url, timeout=60: pages[url])
+
+    reason = ft.risk_changes("NVDA", use_llm=False)["reason"]
+    assert "改写" in reason
+    assert "定位" in reason
+    assert "仅供参考" in reason
 
